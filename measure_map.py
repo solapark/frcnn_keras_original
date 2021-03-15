@@ -14,6 +14,7 @@ from keras.models import Model
 from keras_frcnn import roi_helpers
 from keras_frcnn import data_generators
 from sklearn.metrics import average_precision_score
+from keras.utils import generic_utils
 
 
 def get_map(pred, gt, f):
@@ -26,8 +27,8 @@ def get_map(pred, gt, f):
 		bbox['bbox_matched'] = False
 
 	pred_probs = np.array([s['prob'] for s in pred])
-	print(pred)
-	print(pred_probs)
+	#print(pred)
+	#print(pred_probs)
 	box_idx_sorted_by_prob = np.argsort(pred_probs)[::-1]
 
 	for box_idx in box_idx_sorted_by_prob:
@@ -58,7 +59,7 @@ def get_map(pred, gt, f):
 			iou = 0
 			iou = data_generators.iou((pred_x1, pred_y1, pred_x2, pred_y2), (gt_x1, gt_y1, gt_x2, gt_y2))
 			iou_result += iou
-			print('IoU = ' + str(iou))
+			#print('IoU = ' + str(iou))
 			if iou >= 0.5:
 				found_match = True
 				gt_box['bbox_matched'] = True
@@ -92,7 +93,10 @@ parser.add_option("--config_filename", dest="config_filename", help=
 				default="config.pickle")
 parser.add_option("-o", "--parser", dest="parser", help="Parser to use. One of simple or pascal_voc",
 				default="pascal_voc"),
-parser.add_option("-i", "--output_model_number", dest="model_iter", help="Models of Epoch step to use. Type this with leading spaces for the hdf5 files!"),
+parser.add_option("-i", "--output_model_number", type=int, dest="model_iter", help="Models of Epoch step to use. Type this with leading spaces for the hdf5 files!"),
+
+parser.add_option("--base_path", help= "base path",  default="/data3/sap/frcnn_keras_original")
+parser.add_option("--save_dir", help= "save_dir")
 
 (options, args) = parser.parse_args()
 
@@ -112,9 +116,9 @@ config_output_filename = options.config_filename
 with open(config_output_filename, 'rb') as f_in:
 	C = pickle.load(f_in)
 
-if options.model_iter is not None:
-	x = re.match("^(.+)(\.hdf5)$", C.model_path)
-	C.model_path = x.group(1) + "_" + options.model_iter + x.group(2)
+x = re.match("^(.+)(\.hdf5)$", C.model_path)
+model_name = x.group(1) + "_" + '%04d'%(options.model_iter) + x.group(2)
+C.model_path = os.path.join(options.base_path, 'experiment', options.save_dir, 'model', model_name)
 
 # turn off any data augmentation at test time
 C.use_horizontal_flips = False
@@ -198,8 +202,9 @@ begin = time.time()
 T = {}
 P = {}
 iou_result = 0
+progbar = generic_utils.Progbar(len(test_imgs))
 for idx, img_data in enumerate(test_imgs):
-	print('{}/{}'.format(idx + 1,len(test_imgs)))
+	#print('{}/{}'.format(idx + 1,len(test_imgs)))
 	st = time.time()
 	filepath = img_data['filepath']
 
@@ -214,7 +219,7 @@ for idx, img_data in enumerate(test_imgs):
 	[Y1, Y2, F] = model_rpn.predict(X)
 
 
-	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.5)
+	R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.common.image_dim_ordering(), overlap_thresh=0.5)
 
 
 	# convert from (x1,y1,x2,y2) to (x,y,w,h)
@@ -279,7 +284,7 @@ for idx, img_data in enumerate(test_imgs):
 			all_dets.append(det)
 
 
-	print('Elapsed time = {}'.format(time.time() - st))
+	#print('Elapsed time = {}'.format(time.time() - st))
 	t, p, iou = get_map(all_dets, img_data['bboxes'], (fx, fy))
 	iou_result += iou
 	for key in t.keys():
@@ -288,14 +293,18 @@ for idx, img_data in enumerate(test_imgs):
 			P[key] = []
 		T[key].extend(t[key])
 		P[key].extend(p[key])
-	all_aps = []
-	for key in T.keys():
-		ap = average_precision_score(T[key], P[key])
-		print('{} AP: {}'.format(key, ap))
-		all_aps.append(ap)
-	print('mAP = {}'.format(np.mean(np.array(all_aps))))
-	
+	progbar.update(idx+1)
+
 	#print(T)
 	#print(P)
-print('Completely Elapsed time = {}'.format(time.time() - begin))
+
+all_aps = []
+for key in T.keys():
+    ap = average_precision_score(T[key], P[key])
+    print('{} AP: {}'.format(key, ap))
+    all_aps.append(ap)
+print('mAP = {}'.format(np.mean(np.array(all_aps))))
 print('IoU@0.50 = ' + str(iou_result/len(test_imgs)))
+total_time = time.time() - begin
+print('Completely Elapsed time = {}'.format(total_time))
+print('Completely Elapsed time Per an image = {}'.format(total_time/len(test_imgs)))
