@@ -192,7 +192,7 @@ print('Starting training')
 
 vis = True
 
-log_manager = utility.Log_manager(save_path, options.reset)
+train_log = utility.Log_manager(save_path, options.reset, header = ['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls', 'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'time'])
 
 for epoch_num in range(num_epochs):
 
@@ -293,7 +293,7 @@ for epoch_num in range(num_epochs):
 					print(f'Loss Detector regression: {loss_class_regr}')
 					print(f'Elapsed time: {time.time() - start_time}')
 
-				log_manager.write([mean_overlapping_bboxes, class_acc, loss_rpn_cls, loss_rpn_regr, loss_class_cls, loss_class_regr, datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')])
+				train_log.write([mean_overlapping_bboxes, class_acc, loss_rpn_cls, loss_rpn_regr, loss_class_cls, loss_class_regr, datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')])
 
 				curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
 				iter_num = 0

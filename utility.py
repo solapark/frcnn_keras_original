@@ -29,9 +29,10 @@ def write_config(path, option, C, is_reset):
 	f.close()
 
 class Log_manager:
-	def __init__(self, save_dir, reset):
+	def __init__(self, save_dir, reset, header):
 		self.path = os.path.join(save_dir, 'log.csv')
-		if(reset): self.write(['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls', 'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'time'])
+		#if(reset): self.write(['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls', 'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'time'])
+		if(reset): self.write(header)
 	
 	def write(self, c):
 		f = open(self.path, 'a')
