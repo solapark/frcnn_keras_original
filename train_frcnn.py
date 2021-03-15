@@ -7,6 +7,9 @@ import numpy as np
 from optparse import OptionParser
 import pickle
 import re
+import os
+import datetime
+import csv
 
 from keras import backend as K
 from keras.optimizers import Adam, SGD, RMSprop
@@ -16,6 +19,8 @@ from keras_frcnn import config, data_generators
 from keras_frcnn import losses as losses
 import keras_frcnn.roi_helpers as roi_helpers
 from keras.utils import generic_utils
+
+import utility
 
 sys.setrecursionlimit(40000)
 
@@ -32,21 +37,23 @@ parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degr
 				  action="store_true", default=False)
 parser.add_option("--num_epochs", type="int", dest="num_epochs", help="Number of epochs.", default=2000)
 
-#parser.add_option("--base_path", help= "base path",  default="/data3/sap/frcnn_keras")
-#parser.add_option("--save_dir", help= "save_dir",  default=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S'))
-#parser.add_option("--load_dir", help= "load_dir",  default='')
-
-parser.add_option("--config_filename", dest="config_filename", help=
-				"Location to store all the metadata related to the training (to be used when testing).",
-				default="config.pickle")
-parser.add_option("--output_weight_path", dest="output_weight_path", help="Output path for weights.", default='model_frcnn.hdf5')
 parser.add_option("--input_weight_path", dest="input_weight_path", help="Input path for weights. If not specified, will try to load default weights provided by keras.")
+
+parser.add_option("--base_path", help= "base path",  default="/data3/sap/frcnn_keras_original")
+parser.add_option("--save_dir", help= "save_dir",  default=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S'))
+parser.add_option("--reset", help="reset save_dir", action="store_true", default=False)
+parser.add_option('--resume', action="store_true", default=False, help='resume from last checkpoint')
+
 
 (options, args) = parser.parse_args()
 
-#save_path = utility.make_save_dir(options.base_path, options.save_dir, options.reset)
+if(options.resume == options.reset):
+    print('options.resume(', options.resume, ') == options.reset(', options.reset, ')')
+    exit(1)
 
-if not options.train_path:   # if filename is not given
+save_path = utility.make_save_dir(options.base_path, options.save_dir, options.reset)
+
+if not options.train_path:	 # if filename is not given
 	parser.error('Error: path to training data must be specified. Pass --path to command line')
 
 if options.parser == 'pascal_voc':
@@ -63,11 +70,10 @@ C.use_horizontal_flips = bool(options.horizontal_flips)
 C.use_vertical_flips = bool(options.vertical_flips)
 C.rot_90 = bool(options.rot_90)
 
-C.model_path = options.output_weight_path
-model_path_regex = re.match("^(.+)(\.hdf5)$", C.model_path)
-if model_path_regex.group(2) != '.hdf5':
-	print('Output weights must have .hdf5 filetype')
-	exit(1)
+#C.model_path = options.output_weight_path
+model_dir = os.path.join(save_path, 'model')
+model_path_manager = utility.Model_path_manager(model_dir, options.resume) 
+
 C.num_rois = int(options.num_rois)
 
 if options.network == 'vgg':
@@ -82,14 +88,20 @@ else:
 
 
 # check if weight path was passed via command line
-if options.input_weight_path:
+if options.resume :
+	C.base_net_weights = model_path_manager.get_resume_path()
+elif options.input_weight_path:
 	C.base_net_weights = options.input_weight_path
 else:
 	# set the path to weights based on backend and model
 	C.base_net_weights = nn.get_weight_path()
 
-train_imgs, classes_count, class_mapping = get_data(options.train_path, 'trainval')
-val_imgs, _, _ = get_data(options.train_path, 'test')
+if options.parser == 'pascal_voc':
+	train_imgs, classes_count, class_mapping = get_data(options.train_path, 'trainval')
+elif options.parser == 'simple':
+	train_imgs, classes_count, class_mapping = get_data(options.train_path)
+
+#val_imgs, _, _ = get_data(options.train_path, 'test')
 
 if 'bg' not in classes_count:
 	classes_count['bg'] = 0
@@ -103,11 +115,15 @@ print('Training images per class:')
 pprint.pprint(classes_count)
 print(f'Num classes (including bg) = {len(classes_count)}')
 
-config_output_filename = options.config_filename
+#config_output_filename = options.config_filename
+config_output_filename = os.path.join(save_path, 'config.pickle') 
 
 with open(config_output_filename, 'wb') as config_f:
 	pickle.dump(C,config_f)
 	print(f'Config has been written to {config_output_filename}, and can be loaded when testing to ensure correct results')
+
+config_log_path = os.path.join(save_path, 'config.txt')
+utility.write_config(config_log_path, options, C, options.reset)
 
 random.shuffle(train_imgs)
 
@@ -116,8 +132,8 @@ num_imgs = len(train_imgs)
 #train_imgs = [s for s in all_imgs if s['imageset'] == 'trainval']
 #val_imgs = [s for s in all_imgs if s['imageset'] == 'test']
 
-print(f'Num train samples {len(train_imgs}')
-print(f'Num val samples {len(val_imgs)}')
+print(f'Num train samples {len(train_imgs)}')
+#print(f'Num val samples {len(val_imgs)}')
 
 
 data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.common.image_dim_ordering(), mode='train')
@@ -147,7 +163,7 @@ model_classifier = Model([img_input, roi_input], classifier)
 model_all = Model([img_input, roi_input], rpn[:2] + classifier)
 
 try:
-	print('loading weights from {C.base_net_weights}')
+	print('loading weights from', C.base_net_weights)
 	model_rpn.load_weights(C.base_net_weights, by_name=True)
 	model_classifier.load_weights(C.base_net_weights, by_name=True)
 except:
@@ -175,6 +191,8 @@ class_mapping_inv = {v: k for k, v in class_mapping.items()}
 print('Starting training')
 
 vis = True
+
+log_manager = utility.Log_manager(save_path, options.reset)
 
 for epoch_num in range(num_epochs):
 
@@ -267,13 +285,15 @@ for epoch_num in range(num_epochs):
 				rpn_accuracy_for_epoch = []
 
 				if C.verbose:
-					print(f'Mean number of bounding boxes from RPN overlapping ground truth boxes: {mean_overlapping_boxes}')
+					print(f'Mean number of bounding boxes from RPN overlapping ground truth boxes: {mean_overlapping_bboxes}')
 					print(f'Classifier accuracy for bounding boxes from RPN: {class_acc}')
 					print(f'Loss RPN classifier: {loss_rpn_cls}')
 					print(f'Loss RPN regression: {loss_rpn_regr}')
 					print(f'Loss Detector classifier: {loss_class_cls}')
 					print(f'Loss Detector regression: {loss_class_regr}')
 					print(f'Elapsed time: {time.time() - start_time}')
+
+				log_manager.write([mean_overlapping_bboxes, class_acc, loss_rpn_cls, loss_rpn_regr, loss_class_cls, loss_class_regr, datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')])
 
 				curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
 				iter_num = 0
@@ -283,7 +303,8 @@ for epoch_num in range(num_epochs):
 					if C.verbose:
 						print(f'Total loss decreased from {best_loss} to {curr_loss}, saving weights')
 					best_loss = curr_loss
-				model_all.save_weights(model_path_regex.group(1) + "_" + '{:04d}'.format(epoch_num) + model_path_regex.group(2))
+				#model_all.save_weights(model_path_regex.group(1) + "_" + '{:04d}'.format(epoch_num) + model_path_regex.group(2))
+				model_all.save_weights(model_path_manager.get_save_path())
 
 				break
 
