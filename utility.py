@@ -3,8 +3,11 @@ import time
 import datetime
 import csv
 import re
+import math
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import average_precision_score
 
 from gt import data_generators
 
@@ -104,7 +107,7 @@ class Log_manager:
             elif args.reset:
                 self.loss = np.zeros((0, len(self.loss_names)))
 
-        elif args.mode == 'val' :
+        elif args.mode in ['val', 'val_models'] :
             self.ap_names = args.class_list
             self.ap_names[-1] = 'mAP'
             self.ap = np.zeros((0,len(self.ap_names)))
@@ -326,5 +329,170 @@ class timer():
 
     def reset(self):
         self.acc = 0
+
+def get_new_img_size(width, height, img_min_side):
+    if width <= height:
+        f = float(img_min_side) / width
+        resized_height = int(f * height)
+        resized_width = img_min_side
+    else:
+        f = float(img_min_side) / height
+        resized_width = int(f * width)
+        resized_height = img_min_side
+    return resized_width, resized_height
+
+class Map_calculator:
+    #def __init__(self, args, fx, fy):
+    def __init__(self, args):
+        self.num_cam = args.num_cam
+        #self.fx, self.fy = fx, fy         
+        self.class_list_wo_bg = args.class_list[:-1]
+        self.reset()
+
+    def reset(self):
+        self.all_T = {cls : [] for cls in self.class_list_wo_bg}
+        self.all_P = {cls : [] for cls in self.class_list_wo_bg}
+        self.iou_result = 0
+        self.cnt = 0
+
+    def get_gt_batch(self, labels_batch):
+        return [self.get_gt(labels) for labels in labels_batch]
+
+    def get_gt(self, labels):
+        gts = [[] for _ in range(self.num_cam)]
+        for inst in labels :
+            gt_cls = self.class_list_wo_bg[inst['cls']]
+            gt_boxes = inst['resized_box']
+            for cam_idx in range(self.num_cam) : 
+                if cam_idx in gt_boxes :
+                    x1, y1, x2, y2 = gt_boxes[cam_idx]
+                    info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
+                    gts[cam_idx].append(info)
+        return gts
+
+
+    def get_iou(self):
+        return self.iou_result/self.cnt
+
+    def get_map(self) :
+        return np.mean(np.array(self.all_aps))
+
+    def get_aps(self):
+        all_aps = [average_precision_score(t, p) if t else 0 for t, p in zip(self.all_T.values(), self.all_P.values())]
+        all_aps = [ap if not math.isnan(ap) else 0 for ap in all_aps]
+        self.all_aps = all_aps
+        return all_aps
+
+    def get_aps_dict(self):
+        return {cls : ap for cls, ap in zip(self.class_list_wo_bg, self.all_aps)}
+
+    def add_img_tp(self, dets, gts):
+        self.cnt += 1
+        T, P, iou = self.get_img_tp(dets, gts)
+        self.iou_result += iou
+        for key in T.keys():
+            self.all_T[key].extend(T[key])
+            self.all_P[key].extend(P[key])
+
+    def get_img_tp(self, pred, gt):
+        T = {}
+        P = {}
+        iou_result = 0
+
+        for bbox in gt:
+            bbox['bbox_matched'] = False
+
+        pred_probs = np.array([s['prob'] for s in pred])
+        #print(pred)
+        #print(pred_probs)
+        box_idx_sorted_by_prob = np.argsort(pred_probs)[::-1]
+
+        for box_idx in box_idx_sorted_by_prob:
+            pred_box = pred[box_idx]
+            pred_class = pred_box['class']
+            pred_x1 = pred_box['x1']
+            pred_x2 = pred_box['x2']
+            pred_y1 = pred_box['y1']
+            pred_y2 = pred_box['y2']
+            pred_prob = pred_box['prob']
+            if pred_class not in P:
+                P[pred_class] = []
+                T[pred_class] = []
+            P[pred_class].append(pred_prob)
+            found_match = False
+
+            for gt_box in gt:
+                gt_class = gt_box['class']
+                gt_x1 = gt_box['x1']
+                gt_x2 = gt_box['x2']
+                gt_y1 = gt_box['y1']
+                gt_y2 = gt_box['y2']
+                gt_seen = gt_box['bbox_matched']
+                if gt_class != pred_class:
+                    continue
+                if gt_seen:
+                    continue
+                iou = 0
+                iou = data_generators.iou((pred_x1, pred_y1, pred_x2, pred_y2), (gt_x1, gt_y1, gt_x2, gt_y2))
+                iou_result += iou
+                #print('IoU = ' + str(iou))
+                if iou >= 0.5:
+                    found_match = True
+                    gt_box['bbox_matched'] = True
+                    break
+                else:
+                    continue
+
+            T[pred_class].append(int(found_match))
+        for gt_box in gt:
+            if not gt_box['bbox_matched']: # and not gt_box['difficult']:
+                if gt_box['class'] not in P:
+                    P[gt_box['class']] = []
+                    T[gt_box['class']] = []
+
+                T[gt_box['class']].append(1)
+                P[gt_box['class']].append(0)
+
+        #import pdb
+        #pdb.set_trace()
+        return T, P, iou_result
+
+
+class Img_preprocessor:
+    def __init__ (self, args):
+        self.num_cam = args.num_cam
+        self.resized_width, self.resized_height = args.resized_width, args.resized_height
+
+        '''
+        if args.width <= args.height:
+            self.f = args.im_size/args.width
+        else:
+            self.f = args.im_size/args.height
+        self.fx = args.width/float(self.resized_width)
+        self.fy = args.height/float(self.resized_height)
+        '''
+
+        self.img_channel_mean0 = args.img_channel_mean[0]
+        self.img_channel_mean1 = args.img_channel_mean[1]
+        self.img_channel_mean2 = args.img_channel_mean[2]
+        self.img_scaling_factor = args.img_scaling_factor
+    def process_batch(self, batch):
+        #batch (num_cam, batch, w, h, c)
+        result_batch = []
+        for b in np.array(batch).transpose(1, 0, 2, 3, 4) :
+            processed_b = [self.process_img(img) for img in b]
+            result_batch.append(processed_b)
+        return np.array(result_batch).transpose(1, 0, 2, 3, 4)
+        
+    def process_img(self, img):
+        img = cv2.resize(img, (self.resized_width, self.resized_height), interpolation=cv2.INTER_CUBIC)
+        img = img[:, :, (2, 1, 0)]
+        img = img.astype(np.float32)
+        img[:, :, 0] -= self.img_channel_mean0
+        img[:, :, 1] -= self.img_channel_mean1
+        img[:, :, 2] -= self.img_channel_mean2
+        img /= self.img_scaling_factor
+        #img = np.transpose(img, (2, 0, 1))
+        return img
 
 
