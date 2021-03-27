@@ -1,8 +1,8 @@
 from option import args
-from parser import Parser
 from model import Model
 import utility
 from dataloader import DATALOADER
+from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
 
 from keras.utils import generic_utils
 
@@ -10,93 +10,78 @@ import os
 import cv2
 import numpy as np
 
-'''
 def train(args, model, log_manager, img_preprocessor, train_dataloader, val_dataloader) :
-    save_path = utility.make_save_dir(args)
-    model_path_manager = utility.Model_path_manager(args) 
+    model_path_manager = utility.Model_path_manager(args)
+    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
+    rpn_gt_calculator = RPN_GT_CALCULATOR(args)
 
     log_manager.write_cur_time()
-    log_manager.write('Training...')
-    log_manager.write('Num train samples : len(train_dataloader) * num_cams',  len(train_dataloader), '*', args.num_cams)
+    log_manager.write_log('Training...')
+    log_manager.write_log('Num train samples : len(train_dataloader) * num_cam ='+str(len(train_dataloader))+'*'+str(args.num_cam))
 
-
-    losses = np.zeros((args.epoch_length, 5))
-    rpn_accuracy_rpn_monitor = []
-    rpn_accuracy_for_epoch = []
-    start_time = utility.timer()
-
-    best_loss = np.Inf
-    iter_num = 0
+    timer_data, timer_model = utility.timer(), utility.timer()
+    best_mAP = 0
     for epoch_num in range(args.num_epochs):
-        progbar = generic_utils.Progbar(args.epoch_length)
-        log_manager.write('Epoch %d/%d'%(epoch_num+1, args.num_epochs))
+        log_manager.write_log('[Epoch %d/%d]'%(epoch_num+1, args.num_epochs))
 
         for idx in range(len(train_dataloader)):
-            imgs_batch, labels_batch = dataloader[idx]
-            X = img_preprocessor.process_batch(imgs_batch)
-            loss = model_rpn.train(X, labels_batch)
+        #for idx in range(10):
+            timer_data.tic()
+            X, Y = train_dataloader[idx]
+            X = img_preprocessor.process_batch(X)
+            rpn_gt_batch = rpn_gt_calculator.get_batch(Y)
+            timer_data.hold()
 
-                losses[iter_num, 0] = loss_rpn[1]
-                losses[iter_num, 1] = loss_rpn[2]
+            timer_model.tic()
+            if args.mv :
+                loss, num_calssifier_pos_samples = model.train_batch(X, Y, rpn_gt_batch)
+            else :
+                Y = sv_gt_batch_generator.get_gt_batch(Y)
+                loss_list = []
+                num_calssifier_pos_samples_list = []
+                timer_model.tic()
+                for cam_idx in range(args.num_cam):
+                    x = X[cam_idx]
+                    y = Y[0][cam_idx]
+                    cur_rpn_gt_batch = rpn_gt_batch[cam_idx*2:cam_idx*2+2]
 
-                losses[iter_num, 2] = loss_class[1]
-                losses[iter_num, 3] = loss_class[2]
-                losses[iter_num, 4] = loss_class[3]
+                    loss, num_calssifier_pos_samples = model.train_batch(x, y, cur_rpn_gt_batch)
+                    loss_list.append(loss)
+                    num_calssifier_pos_samples_list.append(num_calssifier_pos_samples)
+                loss = np.array(loss_list).mean(0)
+                num_calssifier_pos_samples = np.array(num_calssifier_pos_samples_list).mean()
 
+            timer_model.hold()
+            log_manager.add(loss, 'loss')
+            log_manager.add(num_calssifier_pos_samples, 'num_calssifier_pos_samples')
 
-            progbar.update(iter_num+1, [('rpn_cls', losses[iter_num, 0]), ('rpn_regr', losses[iter_num, 1]),
-
-            if (idx + 1) % self.args.print_every == 0:
-                progbar.update(iter_num+1, [('rpn_cls', losses[iter_num, 0]), ('rpn_regr', losses[iter_num, 1]),
-
-                if iter_num == epoch_length:
-                    loss_rpn_cls = np.mean(losses[:, 0])
-                    loss_rpn_regr = np.mean(losses[:, 1])
-                    loss_class_cls = np.mean(losses[:, 2])
-                    loss_class_regr = np.mean(losses[:, 3])
-                    class_acc = np.mean(losses[:, 4])
-
-                    mean_overlapping_bboxes = float(sum(rpn_accuracy_for_epoch)) / len(rpn_accuracy_for_epoch)
-                    rpn_accuracy_for_epoch = []
-
-                    print(f'Mean number of bounding boxes from RPN overlapping ground truth boxes: {mean_overlapping_bboxes}')
-                    print(f'Classifier accuracy for bounding boxes from RPN: {class_acc}')
-                    print(f'Loss RPN classifier: {loss_rpn_cls}')
-                    print(f'Loss RPN regression: {loss_rpn_regr}')
-                    print(f'Loss Detector classifier: {loss_class_cls}')
-                    print(f'Loss Detector regression: {loss_class_regr}')
-                    print(f'Elapsed time: {time.time() - start_time}')
-
-                    train_log.write([mean_overlapping_bboxes, class_acc, loss_rpn_cls, loss_rpn_regr, loss_class_cls, loss_class_regr, datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')])
-
-                    curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
-                    iter_num = 0
-                    start_time = time.time()
-
-                    model_all.save_weights(model_path_manager.get_save_path())
-                    break
-
-            except Exception as e:
-                print(f'Exception: {e}')
-                continue
-        mean_overlapping_bboxes = float(sum(rpn_accuracy_rpn_monitor))/len(rpn_accuracy_rpn_monitor)
-        rpn_accuracy_rpn_monitor = []
-        print(f'Average number of overlapping bounding boxes from RPN = {mean_overlapping_bboxes} for {epoch_length} previous iterations')
-        if mean_overlapping_bboxes == 0:
-            print('RPN is not producing bounding boxes that overlap the ground truth boxes. Check RPN settings or keep training.')
-
-
-    print('Training complete, exiting.')
-'''
+            if (idx + 1) % args.print_every == 0:
+                log_manager.write_log('[%d/%d]\t[%s]\t[%s]\t%.2fs + %.2fs'%(
+                    idx+1, 
+                    len(train_dataloader), 
+                    log_manager.display('loss'), 
+                    log_manager.display('num_calssifier_pos_samples'), 
+                    timer_data.release(), 
+                    timer_model.release()))
+            timer_data.tic()
+        log_manager.epoch_done()
+    
+        cur_mAP = calc_map(args, model, log_manager, img_preprocessor, val_dataloader)
+        if(cur_mAP > best_mAP):
+            best_mAP = cur_mAP
+            model.save(model_path_manager.get_path('best'))
+        model.save(model_path_manager.get_path('last'))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
+    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     map_calculator = utility.Map_calculator(args)
     timer_test = utility.timer()
     progbar = generic_utils.Progbar(len(dataloader))
     for idx in range(len(dataloader)):
+    #for idx in range(3):
         #if(idx%40 !=0) : continue
         imgs_batch, labels_batch = dataloader[idx]
-        gt_batch = map_calculator.get_gt_batch(labels_batch)
+        gt_batch = sv_gt_batch_generator.get_gt_batch(labels_batch)
         X = img_preprocessor.process_batch(imgs_batch)
         if args.mv:
             all_dets = model.predict(X)
@@ -111,7 +96,6 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
 
                 gt = gt_batch[0][cam_idx]
                 map_calculator.add_img_tp(all_dets, gt) 
-
         progbar.update(idx+1)
     
     all_aps = map_calculator.get_aps()
@@ -122,19 +106,20 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     log_manager.save()
 
     all_ap_dict = map_calculator.get_aps_dict()
+    cur_map = map_calculator.get_map()
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
     log_manager.write_log('iou: {:.3f}'.format(iou_avg))
     log_manager.write_log(
         'ap : {}\nmAP: {:.3f} (Best: {:.3f} @epoch {})'.format(
             str(all_ap_dict),
-            map_calculator.get_map(),
+            cur_map,
             log_manager.best_map,
             log_manager.best_map_epoch
         )
     )
     log_manager.write_log('Runtime: {:.2f}s\n'.format(timer_test.toc()))
-
+    return cur_map
 
 def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
     model_path_manager = utility.Model_path_manager(args)
@@ -148,15 +133,18 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
 
 if __name__ == '__main__' :
     model = Model(args)
+    utility.file_system(args)
     log_manager = utility.Log_manager(args)
     img_preprocessor = utility.Img_preprocessor(args)
 
     if(args.mode == 'train'):
         train_dataloader = DATALOADER(args, 'train', args.train_path)
         val_dataloader = DATALOADER(args, 'val', args.val_path)
+        #model.load(args.input_weight_path)
         train(args, model, log_manager, img_preprocessor, train_dataloader, val_dataloader)
     elif(args.mode == 'val'):
         val_dataloader = DATALOADER(args, 'val', args.val_path)
+        #model.load(args.model_load_path)
         calc_map(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'test'):
         test(args, model, log_manager)

@@ -21,6 +21,7 @@ class DATALOADER :
 
         self.mode = mode
         self.shuffle = True if(self.mode == 'train') else False
+        #self.shuffle = False
 
         dataset_file = self.demo_file if self.mode == 'demo' else '%s.json' %(self.mode) 
         dataset_path = path 

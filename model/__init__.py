@@ -8,10 +8,12 @@ class Model :
         module = import_module('model.' + args.model.lower())
         self.model = module.make_model(args)
         #print(self.model.summary())
+        if args.input_weight_path :
+            self.load(args.input_weight_path)
         self.apath = os.path.join(args.base_path, 'experiment/model')
 
         if(args.mode == 'train'):
-            path_manager = utility.Model_path_manager(self.apath, args.resume)
+            path_manager = utility.Model_path_manager(args)
 
         self.args = args
 
@@ -39,8 +41,11 @@ class Model :
         else : 
             print('model path should be given in val or test mode')
             exit(1)
-        print('Saving model to model_path')
+        print('Saving model to', model_path)
         self.model.save(model_path)
 
     def predict(self, X):
         return self.model.predict(X) 
+
+    def train_batch(self, X, Y, rpn_gt_batch):
+        return self.model.train_batch(X, Y, rpn_gt_batch) 

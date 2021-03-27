@@ -7,6 +7,7 @@ parser = argparse.ArgumentParser()
 
 #mode
 parser.add_argument('--mode', type=str, default='test', choices=['train', 'val', 'test', 'val_models'])
+parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
 parser.add_argument('--model', type=str, default='frcnn')
@@ -19,8 +20,8 @@ parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
 parser.add_argument("--dataset", default = 'INTERPARK18', help="Path to training data.")
-parser.add_argument("--train_path", help="Path to training data.")
-parser.add_argument("--val_path", help="Path to training data.")
+parser.add_argument("--train_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/train.json', help="Path to training data.")
+parser.add_argument("--val_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/val.json',  help="Path to val data.")
 parser.add_argument("--val_models_path", help="Path to val models.")
 parser.add_argument("--test_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
@@ -32,7 +33,8 @@ parser.add_argument("-vf", '--use_vertical_flips', help="Augment with vertical f
 parser.add_argument("-rot", "--rot_90", help="Augment with 90 degree rotations in training. (Default=false).", action="store_true", default=False)
 
 #log
-parser.add_argument("--loss_log", nargs=3, default=['rpn_cls', 'rpn_grer', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
+parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
+parser.add_argument("--print_every", default=10, help="print every iter")
 
 #train_spec
 parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
@@ -62,6 +64,8 @@ parser.add_argument('--img_scaling_factor', type=float, default=1.0,
 parser.add_argument("--network", help="Base network to use. Supports vgg or resnet50.", default='resnet50')
 
 #rpn
+parser.add_argument('--rpn_max_num_sample', type=int, default=256,
+                    help='rpn maximum number of samples')
 parser.add_argument('--rpn_stride', type=int, default=16,
                     help='')
 parser.add_argument('--std_scaling', type=float, default=4.0,
@@ -86,7 +90,9 @@ if(args.mode == 'train' and  args.resume == args.reset):
     print('options.resume(', args.resume, ') == options.reset(', args.reset, ') in train mode')
     exit(1)
 
+args.rpn_std_scaling = args.std_scaling
 args.anchor_box_ratios = [[args.anchor_box_ratios[i*2], args.anchor_box_ratios[i*2+1]] for i in range(3)]
+args.anchor_wh = [(scale * ratio[0], scale*ratio[1]) for scale in args.anchor_box_scales for ratio in args.anchor_box_ratios]
 args.num_anchors = len(args.anchor_box_scales) * len(args.anchor_box_ratios)
 
 get_dataset_info(args)

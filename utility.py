@@ -5,6 +5,7 @@ import csv
 import re
 import math
 import cv2
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import average_precision_score
@@ -21,6 +22,39 @@ def make_save_dir(base_dir, save_dir, reset):
         os.makedirs(save_path, exist_ok = True)
         os.makedirs(model_path, exist_ok = True)
     return save_path
+
+def intersection(ai, bi):
+    x = max(ai[0], bi[0])
+    y = max(ai[1], bi[1])
+    w = min(ai[2], bi[2]) - x
+    h = min(ai[3], bi[3]) - y
+    if w < 0 or h < 0:
+        return 0
+    return w*h
+
+def iou(a, b):
+    # a and b should be (x1,y1,x2,y2)
+    if a[0] >= a[2] or a[1] >= a[3] or b[0] >= b[2] or b[1] >= b[3]:
+        return 0.0
+
+    area_i = intersection(a, b)
+    area_u = union(a, b, area_i)
+
+    return float(area_i) / float(area_u + 1e-6)
+
+def union(au, bu, area_intersection):
+    area_a = (au[2] - au[0]) * (au[3] - au[1])
+    area_b = (bu[2] - bu[0]) * (bu[3] - bu[1])
+    area_union = area_a + area_b - area_intersection
+    return area_union
+
+def get_concat_img(img_list, cols=3):
+    rows = int(len(img_list)/cols)
+    hor_imgs = [np.hstack(img_list[i*cols:(i+1)*cols]) for i in range(rows)]
+    ver_imgs = np.vstack(hor_imgs)
+    return ver_imgs
+
+
 
 '''
 def write_config(path, option, C, is_reset):
@@ -90,6 +124,63 @@ class Model_path_manager:
         all_names.sort()
         return [os.path.join(self.model_dir, name) for name in all_names]
 
+    def get_path(self, name) : 
+        return '%s_%s.%s' %(self.prefix, name, self.ext)
+
+class Data_to_monitor :
+    def __init__(self, name, names) :
+        self.name = name
+        self.names = names
+        self.num_data = len(names)
+        self.reset()
+
+    def add(self, data):
+        self.data = np.concatenate([self.data, np.array(data).reshape(-1, self.num_data)])
+
+    def mean(self):
+        return np.mean(self.data, axis=0)
+
+    def reset(self):
+        self.data = np.zeros((0, self.num_data))
+
+    def get_name(self):
+        return self.names
+
+    def get_best(self):
+        best_idx = np.argmax(self.data)
+        best = self.data[best_idx]
+        return best_idx[0], best
+
+    def get_length(self):
+        return len(self.data)
+
+    def get_data(self):
+        return self.data
+
+    def load(self, path):
+        self.data = np.load(path).reshape((-1, self.num_data))
+
+    def save(self, path):
+        np.save(path, self.data)
+
+    def plot(self, path):
+        epoch = len(self.data)
+        axis = np.linspace(1, epoch, epoch)
+        fig = plt.figure()
+        plt.title(self.name)
+        for n, d in zip(self.names, self.data.T) :
+            plt.plot(axis, d, label=n)
+        plt.legend()
+        plt.xlabel('Epochs')
+        plt.ylabel(self.name)
+        plt.grid(True)
+        plt.savefig(path)
+        plt.close(fig)
+
+    def display(self):
+        log = ['%s: %.4f'%(n, v) for n, v in zip(self.names, self.mean())]
+        return ' '.join(log)
+        
 class Log_manager:
     def __init__(self, args):
         self.args = args
@@ -99,22 +190,31 @@ class Log_manager:
         self.log_file = self.get_log_file()
 
         if args.mode == 'train' :
-            self.loss_names = args.loss_log
+            self.loss_every_iter = Data_to_monitor('Loss', args.loss_log)
+            self.loss_every_epoch = Data_to_monitor('Loss', args.loss_log)
+            self.num_calssifier_pos_samples_every_iter = Data_to_monitor('num_calssifier_pos_samples', ['num_calssifier_pos_samples'])
+            self.num_calssifier_pos_samples_every_epoch = Data_to_monitor('num_calssifier_pos_samples',['num_calssifier_pos_samples'])
+
             if args.resume:
-                self.loss = np.load(self.get_path('loss.npy'))
-                print('Continue from epoch {}...'.format(len(self.loss)))
+                self.loss_every_epoch.load(self.get_path('loss.npy'))
+                self.num_calssifier_pos_samples_every_epoch.load(self.get_path('num_calssifier_pos_samples.npy'))
+                print('Continue from epoch {}...'.format(len(self.loss_every_epoch.get_data())))
 
-            elif args.reset:
-                self.loss = np.zeros((0, len(self.loss_names)))
-
-        elif args.mode in ['val', 'val_models'] :
+        if args.mode in ['val', 'val_models', 'train'] :
             self.ap_names = args.class_list
-            self.ap_names[-1] = 'mAP'
-            self.ap = np.zeros((0,len(self.ap_names)))
-            self.iou = np.zeros((0,))
+            self.ap = Data_to_monitor('ap', self.ap_names[:-1])
+            self.map = Data_to_monitor('map', ['map'])
+            self.iou = Data_to_monitor('iou', ['iou'])
 
             self.best_map = 0
-            self.best_map_epoch = 0 
+            self.best_map_epoch = 0
+
+            if args.resume:
+                self.ap.load(self.get_path('ap.npy'))
+                self.map.load(self.get_path('map.npy'))
+                self.iou.load(self.get_path('iou.npy'))
+                
+                self.best_map_epoch, self.best_map = slef.map.get_best()
 
     def get_path(self, *subdir):
         return os.path.join(self.dir, *subdir)
@@ -136,29 +236,51 @@ class Log_manager:
 
     def save(self):
         if(self.args.mode == 'train'):
-            np.save(self.get_path('loss'), self.loss)
-            self.plot(self.loss, 'loss')
-        elif(self.args.mode == 'val'):
-            np.save(self.get_path('iou'), self.iou)
-            np.save(self.get_path('ap'), self.ap)
-            self.plot(self.iou, 'iou')
-            self.plot(self.ap, 'ap')
+            self.loss_every_epoch.save(self.get_path('loss'))
+            self.loss_every_epoch.plot(self.get_path('loss.pdf'))
+            self.num_calssifier_pos_samples_every_epoch.save(self.get_path('num_calssifier_pos_samples'))
+            self.num_calssifier_pos_samples_every_epoch.plot(self.get_path('num_calssifier_pos_samples.pdf'))
+        if(self.args.mode in ['val', 'val_models', 'train']):
+            self.ap.save(self.get_path('ap'))
+            self.map.save(self.get_path('map'))
+            self.iou.save(self.get_path('iou'))
+            
+            self.ap.plot(self.get_path('ap.pdf'))
+            self.map.plot(self.get_path('map.pdf'))
+            self.iou.plot(self.get_path('iou.pdf'))
 
     def add(self, data, name):
+        if name == 'num_calssifier_pos_samples':
+            self.num_calssifier_pos_samples_every_iter.add(data)
         if name == 'loss':
-            self.loss = np.concatenate([self.loss, np.expand_dims(data, 0)])
+            self.loss_every_iter.add(data)
         elif name == 'ap':
+            self.ap.add(data)
             mAP = sum(data)/len(data)
-            data.append(mAP) #map
-            self.ap = np.concatenate([self.ap, np.expand_dims(data, 0)])
             if(mAP > self.best_map):
                 self.best_map = mAP
-                self.best_map_epoch = len(self.ap) 
+                self.best_map_epoch = self.map.get_length() + 1
+            self.map.add(mAP)
         
         elif name == 'iou' :
-            self.iou = np.append(self.iou, data)
+            self.iou.add(data)
 
-    def write_log(self, log, refresh=False):
+    def epoch_done(self):
+        self.loss_every_epoch.add(self.loss_every_iter.mean())
+        self.num_calssifier_pos_samples_every_epoch.add(self.num_calssifier_pos_samples_every_iter.mean())
+
+        self.loss_every_iter.reset()
+        self.num_calssifier_pos_samples_every_iter.reset()
+        self.save()
+
+    def display(self, name):
+        if name == 'loss':
+            result = self.loss_every_iter.display()
+        elif name == 'num_calssifier_pos_samples':
+            result = self.num_calssifier_pos_samples_every_iter.display()
+        return result
+
+    def write_log(self, log, refresh=True):
         print(log)
         self.log_file.write(log + '\n')
         if refresh:
@@ -355,6 +477,7 @@ class Map_calculator:
         self.iou_result = 0
         self.cnt = 0
 
+    '''
     def get_gt_batch(self, labels_batch):
         return [self.get_gt(labels) for labels in labels_batch]
 
@@ -369,7 +492,7 @@ class Map_calculator:
                     info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
                     gts[cam_idx].append(info)
         return gts
-
+    '''
 
     def get_iou(self):
         return self.iou_result/self.cnt
@@ -496,3 +619,56 @@ class Img_preprocessor:
         return img
 
 
+class Sv_gt_batch_generator:
+    def __init__(self, args):
+        self.num_cam = args.num_cam
+        self.class_list_wo_bg = args.class_list[:-1]
+
+    def get_gt_batch(self, mv_labels_batch):
+        return [self.get_gt(mv_labels) for mv_labels in mv_labels_batch]
+
+    def get_gt(self, mv_labels):
+        gts = [[] for _ in range(self.num_cam)]
+        for inst in mv_labels :
+            gt_cls = self.class_list_wo_bg[inst['cls']]
+            gt_boxes = inst['resized_box']
+            for cam_idx in range(self.num_cam) : 
+                if cam_idx in gt_boxes :
+                    x1, y1, x2, y2 = gt_boxes[cam_idx]
+                    info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
+                    gts[cam_idx].append(info)
+        return gts
+
+class CALC_REGR:
+    def __init__(self, std):
+        self.std = np.array(std).reshape(-1, 1)
+
+    def calc_t(self, pred, gt):
+        (cx_gt, cy_gt), (cx_pred, cy_pred) = map(lambda a : [(a[:, 0]+a[:, 2])/2.0, (a[:, 1]+a[:, 3])/2.0], [gt, pred])
+        (w_gt, h_gt), (w_pred, h_pred) = map(lambda a : [a[:, 2]-a[:, 0], a[:, 3]-a[:, 1]], [gt, pred])
+
+        tx = (cx_gt - cx_pred) / w_pred
+        ty = (cy_gt - cy_pred) / h_pred
+        tw = np.log(w_gt/w_pred)
+        th = np.log(h_gt/h_pred)
+
+        tx, ty, tw, th = self.std * [tx, ty, tw, th]
+
+        return np.column_stack([tx, ty, tw, th])
+
+def pickle_save(l, path):
+    f = open(path, 'wb')
+    pickle.dump(l,f)
+
+def pickle_load(path) :
+    f = open(path, 'rb')
+    return pickle.load(f)
+   
+def file_system(args):
+    if args.reset and args.mode == 'train' :
+        save_path = os.path.join(args.base_dir, 'experiment', args.save_dir)
+        model_path = os.path.join(save_path, 'model')
+
+        os.system('rm -rf %s'%(save_path))
+        os.makedirs(save_path, exist_ok = True)
+        os.makedirs(model_path, exist_ok = True)
