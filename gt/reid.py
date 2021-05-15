@@ -1,7 +1,7 @@
 import numpy as np
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from utility import calc_emb_dist, get_min_emb_dist_idx, draw_box, get_concat_img
+from utility import calc_emb_dist
 import cv2
 
 class REID:
@@ -17,6 +17,29 @@ class REID:
         self.num_nms_arange_repeat = np.repeat(self.num_nms_arange, self.num_valid_cam).reshape(self.num_nms, self.num_valid_cam, 1).transpose(1, 0, 2)
         self.box_idx_stack = np.concatenate([self.cam_idx, self.num_nms_arange_repeat], 2).reshape(self.num_valid_cam*self.num_nms, 2) #(num_valid_cam*num_nms, 2)
  
+    def get_min_emb_dist_idx(self, emb, embs, thresh = np.zeros(0), is_want_dist = 0, epi_dist = None): 
+        '''
+        Args :
+            emb (shape : m, n)
+            embs (shape : m, k, n)
+            thresh_dist : lower thersh. throw away too small dist (shape : m, )
+        Return :
+            min_dist_idx (shape : m, 1)
+        '''
+        emb_ref = emb[:, np.newaxis, :]
+        dist = calc_emb_dist(emb_ref, embs) #(m, k)
+        dist[np.where(epi_dist > self.args.epi_dist_thresh)] = np.inf if epi_dist
+
+        if(thresh.size) : 
+            thresh = thresh[:, np.newaxis] #(m, 1)
+            dist[dist<=thresh] = np.inf 
+        min_dist_idx = np.argmin(dist, 1) #(m, )
+        if(is_want_dist):
+            min_dist = dist[np.arange(len(dist)), min_dist_idx]
+            return min_dist_idx, min_dist
+        return min_dist_idx
+
+
     def get_ref(self, pred_box_prob, pred_box, pred_box_emb) : 
         pred_box_prob_stack = np.reshape(pred_box_prob, (self.num_valid_cam*self.num_nms, ))
         top_N_box_idx = self.box_idx_stack[pred_box_prob_stack.argsort()[-self.num_nms:]]
@@ -44,12 +67,13 @@ class REID:
             dist_batch.append(dist)
         return np.array(reid_box_pred_batch), np.array(is_valid_batch), np.array(dist_batch)
 
-    def get_reid_box(self, pred_box, pred_box_emb, pred_box_prob):
+    def get_reid_box(self, pred_box, pred_box_emb, pred_box_prob, extrins):
         """get ref idx, postive idx, negative idx for reid training
             Args : 
                 pred_box : x1, y1, x2, y2 #(num_valid_cam, 300, 4)
                 pred_box_emb #(num_valid_cam, 300, featsize) 
                 pred_box_prob #(num_valid_cam, 300)
+                extrins #(num_cam, 3, 3)
             Return :
                 reid_box #(300, num_valid_cam, 4)
                 is_valid #(300, num_valid_cam)
@@ -67,7 +91,9 @@ class REID:
             target_cam_idx = (ref_cam_idx + offset) % self.num_valid_cam
             cand_emb = pred_box_emb[target_cam_idx]
             cand_box = pred_box[target_cam_idx]
-            min_dist_idx, min_dist = get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True)
+
+            epi_dist = epi.get_epipolar_dist(ref_cam_idx, target_cam_idx, ref_box, cand_box, extrins[ref_cam_idx], extrins[target_cam_idx])
+            min_dist_idx, min_dist = self.get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True, epi_dist = epi_dist)
             reid_box[self.num_nms_arange, target_cam_idx] = pred_box[target_cam_idx, min_dist_idx]
             dist[self.num_nms_arange, target_cam_idx] = min_dist
 

@@ -91,12 +91,15 @@ parser.add_argument('--rpn_min_overlap', type=float, default=.3,
 
 #ven
 parser.add_argument('--ven_feat_size', type=int, default=128, help='output rpn maximum number of samples')
+
+#reid
 parser.add_argument('--reid_gt_min_overlap', type=float, default=.3,
                     help='minimum iou to match pred box and gt box')
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
 parser.add_argument('--reid_min_emb_dist', type=float, default=.14,
                     help='minimum embedding distance to match two pred boxes')
-
+parser.add_argument('--epi_dist_thresh', type=float, default=.3,
+                    help='maximum distance form epipolar line to match two pred boxes')
 
 
 
