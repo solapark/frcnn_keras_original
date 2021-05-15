@@ -5,6 +5,7 @@ def get_dataset_info(args):
     m = import_module('data.' + args.dataset.lower())
     obj = getattr(m, args.dataset)()
     args.num_cls = obj.num_cls
+    args.num_cls_with_bg = obj.num_cls + 1
     args.class_mapping = obj.class_mapping
     args.num2cls = list(args.class_mapping)[:-1] # without bg
     args.cls2num = {cls:i for i, cls in enumerate(args.num2cls)} # without bg

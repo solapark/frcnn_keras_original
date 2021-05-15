@@ -47,5 +47,5 @@ class Model :
     def predict(self, X):
         return self.model.predict(X) 
 
-    def train_batch(self, X, Y, rpn_gt_batch):
-        return self.model.train_batch(X, Y, rpn_gt_batch) 
+    def train_batch(self, X, Y, debug_img):
+        return self.model.train_batch(X, Y, debug_img) 

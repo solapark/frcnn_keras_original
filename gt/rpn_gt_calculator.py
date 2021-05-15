@@ -8,7 +8,7 @@ import cv2
 
 class RPN_GT_CALCULATOR:
     def __init__(self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.resized_width, self.resized_height = args.resized_width, args.resized_height
         self.downscale = float(args.rpn_stride) 
         self.anchor_wh = args.anchor_wh
@@ -24,16 +24,16 @@ class RPN_GT_CALCULATOR:
         self.calc_regr = CALC_REGR(self.rpn_std_scaling)
 
     def get_batch(self, gt_insts_batch):
-        rpn_gt_batch = [[] for _ in range(self.num_cam*2)]
+        rpn_gt_batch = [[] for _ in range(self.num_valid_cam*2)]
         for gt_insts in gt_insts_batch :
             result = self.get_rpn_gt(gt_insts)
-            for i in range(self.num_cam*2):
+            for i in range(self.num_valid_cam*2):
                 rpn_gt_batch[i].append(result[i])
         rpn_gt_batch = list(map(lambda a : np.stack(a, 0), rpn_gt_batch))
         return rpn_gt_batch
  
     def sort_by_cam(self, gt_insts):
-        boxes_sorted_by_cam = [[] for _ in range(self.num_cam)] 
+        boxes_sorted_by_cam = [[] for _ in range(self.num_valid_cam)] 
         for gt_inst in gt_insts:
             for cam_idx, box in list(gt_inst['resized_box'].items()) :
                 boxes_sorted_by_cam[cam_idx].append(box)
@@ -42,7 +42,7 @@ class RPN_GT_CALCULATOR:
     def get_rpn_gt(self, gt_insts):
         boxes = self.sort_by_cam(gt_insts)
         result_list = []
-        for cam_idx in range(self.num_cam) :
+        for cam_idx in range(self.num_valid_cam) :
             rpn_gt_cls, rpn_gt_regr = self.calc_rpn_gt(boxes[cam_idx])
             result_list.extend([rpn_gt_cls, rpn_gt_regr])
         return result_list
@@ -189,7 +189,7 @@ if __name__ == '__main__' :
     print('rpn_gt_cls.shape', rpn_gt_cls.shape, 'rpn_gt_regr.shape', rpn_gt_regr.shape)
     rpn_gt_calculator.draw_rpn_gt(imgs_in_batch, rpn_gt_cls)
     '''
-    rpn_gt = [ rpn_gt_cls[:, i//2] if i % 2 == 0 else rpn_gt_regr[:, i//2] for i in range(num_cam*2) ]
+    rpn_gt = [ rpn_gt_cls[:, i//2] if i % 2 == 0 else rpn_gt_regr[:, i//2] for i in range(num_valid_cam*2) ]
     import pickle
     with open('/home/sap/frcnn_keras/mv_train_two_XY.pickle', 'rb') as f:
         XY = pickle.load(f)

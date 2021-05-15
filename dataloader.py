@@ -10,11 +10,13 @@ class DATALOADER :
     def __init__(self, args, mode, path):
         self.batch_size = args.batch_size
         self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.num_cls = args.num_cls
         self.num2cls = args.num2cls
         self.cls2num = args.cls2num
         self.base_dir = args.base_dir
         self.dataset = args.dataset
+        self.img_dir = args.img_dir
         self.demo_file = args.demo_file
         self.width, self.height = args.width, args.height
         self.resized_width, self.resized_height = args.resized_width, args.resized_height
@@ -29,7 +31,7 @@ class DATALOADER :
         data = self.get_data_from_json(dataset_path)
         img_path_list = self.get_img_path_list(data) #X
 
-        self.image_dataloader = IMAGE_DATALOADER(img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_cam)
+        self.image_dataloader = IMAGE_DATALOADER(img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
@@ -45,8 +47,9 @@ class DATALOADER :
         img_path_list = []
         for scene_content in list(json['scenes'].values()) :
             path_dict = dict()
-            for cam_num, camera_content in list(scene_content['cameras'].items()) :
-                path_dict[int(cam_num)] = camera_content['pathname']
+            for cam_idx, camera_content in list(scene_content['cameras'].items()) :
+                if int(cam_idx) > self.num_valid_cam : continue
+                path_dict[int(cam_idx)] = os.path.join(self.img_dir, camera_content['pathname'])
             img_path_list.append(path_dict)
         return img_path_list
 
@@ -57,15 +60,16 @@ class DATALOADER :
         for scene_content in list(json['scenes'].values()):
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
-                resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}}
-                for cam_num, camera_content in list(scene_content['cameras'].items()) :
+                resized_instance_dict[instance_num] = {'cls':str(cls), 'resized_box':{}}
+                for cam_idx, camera_content in list(scene_content['cameras'].items()) :
+                    if int(cam_idx) > self.num_valid_cam : continue
                     if instance_num in camera_content['instances'] :
                         x1, y1, x2, y2 = camera_content['instances'][instance_num]['pos']
                         x1 *= zoom_in_w                
                         x2 *= zoom_in_w                
                         y1 *= zoom_in_h                
                         y2 *= zoom_in_h                
-                        resized_instance_dict[instance_num]['resized_box'][int(cam_num)] = list(map(float, [x1, y1, x2, y2]))
+                        resized_instance_dict[instance_num]['resized_box'][int(cam_idx)-1] = list(map(float, [x1, y1, x2, y2]))
 
             resized_instance_list.append(list(resized_instance_dict.values()))
         self.zoom_in_w = zoom_in_w

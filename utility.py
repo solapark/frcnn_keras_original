@@ -7,6 +7,8 @@ import math
 import cv2
 import pickle
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.metrics import average_precision_score
 
@@ -42,6 +44,23 @@ def iou(a, b):
 
     return float(area_i) / float(area_u + 1e-6)
 
+def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
+    area_i_list, area_u_list = [], []
+    for box_a, box_b, is_valid_a, is_valid_b in zip(boxes_a, boxes_b, is_valids_a, is_valids_b):
+        if is_valid_a and is_valid_b :
+            area_i = intersection(box_a, box_b) 
+        else :
+            area_i = 0
+            if not is_valid_a :
+                box_a = np.zeros((4, ))
+            if not is_valid_b :
+                box_b = np.zeros((4, ))
+        area_u = union(box_a, box_b, area_i)
+        area_i_list.append(area_i)
+        area_u_list.append(area_u)
+
+    return float(sum(area_i_list)) / float(sum(area_u_list) + 1e-6), area_i_list, area_u_list
+
 def union(au, bu, area_intersection):
     area_a = (au[2] - au[0]) * (au[3] - au[1])
     area_b = (bu[2] - bu[0]) * (bu[3] - bu[1])
@@ -54,10 +73,7 @@ def get_concat_img(img_list, cols=3):
     ver_imgs = np.vstack(hor_imgs)
     return ver_imgs
 
-
-
-'''
-def write_config(path, option, C, is_reset):
+def write_config_sv(path, option, C, is_reset):
     if(is_reset):
         f = open(path, 'w')
     else :
@@ -71,7 +87,7 @@ def write_config(path, option, C, is_reset):
     f.write('\n')
     f.close()
 
-class Log_manager:
+class Log_manager_sv:
     def __init__(self, save_dir, reset, header, file_name = 'log.csv'):
         self.path = os.path.join(save_dir, file_name)
         #if(reset): self.write(['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls', 'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'time'])
@@ -83,7 +99,6 @@ class Log_manager:
         wr.writerow(c)
         f.close()
 
-'''
 
 class Model_path_manager:
     def __init__(self, args):
@@ -138,7 +153,7 @@ class Data_to_monitor :
         self.data = np.concatenate([self.data, np.array(data).reshape(-1, self.num_data)])
 
     def mean(self):
-        return np.mean(self.data, axis=0)
+        return np.nanmean(self.data, axis=0)
 
     def reset(self):
         self.data = np.zeros((0, self.num_data))
@@ -466,7 +481,7 @@ def get_new_img_size(width, height, img_min_side):
 class Map_calculator:
     #def __init__(self, args, fx, fy):
     def __init__(self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         #self.fx, self.fy = fx, fy         
         self.class_list_wo_bg = args.class_list[:-1]
         self.reset()
@@ -482,11 +497,11 @@ class Map_calculator:
         return [self.get_gt(labels) for labels in labels_batch]
 
     def get_gt(self, labels):
-        gts = [[] for _ in range(self.num_cam)]
+        gts = [[] for _ in range(self.num_valid_cam)]
         for inst in labels :
             gt_cls = self.class_list_wo_bg[inst['cls']]
             gt_boxes = inst['resized_box']
-            for cam_idx in range(self.num_cam) : 
+            for cam_idx in range(self.num_valid_cam) : 
                 if cam_idx in gt_boxes :
                     x1, y1, x2, y2 = gt_boxes[cam_idx]
                     info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
@@ -583,7 +598,7 @@ class Map_calculator:
 
 class Img_preprocessor:
     def __init__ (self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.resized_width, self.resized_height = args.resized_width, args.resized_height
 
         '''
@@ -600,7 +615,7 @@ class Img_preprocessor:
         self.img_channel_mean2 = args.img_channel_mean[2]
         self.img_scaling_factor = args.img_scaling_factor
     def process_batch(self, batch):
-        #batch (num_cam, batch, w, h, c)
+        #batch (num_valid_cam, batch, w, h, c)
         result_batch = []
         for b in np.array(batch).transpose(1, 0, 2, 3, 4) :
             processed_b = [self.process_img(img) for img in b]
@@ -608,7 +623,6 @@ class Img_preprocessor:
         return np.array(result_batch).transpose(1, 0, 2, 3, 4)
         
     def process_img(self, img):
-        img = cv2.resize(img, (self.resized_width, self.resized_height), interpolation=cv2.INTER_CUBIC)
         img = img[:, :, (2, 1, 0)]
         img = img.astype(np.float32)
         img[:, :, 0] -= self.img_channel_mean0
@@ -621,18 +635,18 @@ class Img_preprocessor:
 
 class Sv_gt_batch_generator:
     def __init__(self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.class_list_wo_bg = args.class_list[:-1]
 
     def get_gt_batch(self, mv_labels_batch):
         return [self.get_gt(mv_labels) for mv_labels in mv_labels_batch]
 
     def get_gt(self, mv_labels):
-        gts = [[] for _ in range(self.num_cam)]
+        gts = [[] for _ in range(self.num_valid_cam)]
         for inst in mv_labels :
             gt_cls = self.class_list_wo_bg[inst['cls']]
             gt_boxes = inst['resized_box']
-            for cam_idx in range(self.num_cam) : 
+            for cam_idx in range(self.num_valid_cam) : 
                 if cam_idx in gt_boxes :
                     x1, y1, x2, y2 = gt_boxes[cam_idx]
                     info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
@@ -672,3 +686,203 @@ def file_system(args):
         os.system('rm -rf %s'%(save_path))
         os.makedirs(save_path, exist_ok = True)
         os.makedirs(model_path, exist_ok = True)
+
+def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=True) : 
+    height,_,_ = img_list[0].shape
+    img_min_side = float(args.im_size)
+    ratio = img_min_side/height
+
+    for key in sorted(bboxes):
+        bbox = np.array(bboxes[key]) #(num_cam, num_box, 4)
+        if(is_nms):
+            new_boxes_all_cam, new_probs = non_max_suppression_fast_multi_cam(bbox, np.array(probs[key]), overlap_thresh=0.5)
+        else : 
+            new_boxes_all_cam, new_probs, new_ious_all_cam = bbox, np.array(probs[key]), np.array(ious[key])
+        instance_to_color = [np.random.randint(0, 255, 3) for _ in range(len(new_probs))]
+        for jk in range(new_boxes_all_cam.shape[1]):
+            new_boxes = new_boxes_all_cam[:, jk] #(num_cam, 4)
+            new_ious = new_ious_all_cam[jk, :] #(num_cam, )
+            all_dets = []
+            result_img_list = []
+            for cam_idx in range(num_cam) : 
+                img = img_list[cam_idx].copy()
+                (x1, y1, x2, y2) = new_boxes[cam_idx]
+                if(x1 == -args.rpn_stride) :
+                    result_img_list.append(np.copy(img))
+                    continue 
+                # Calculate real coordinates on original image
+                (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
+
+                color = (int(instance_to_color[jk][0]), int(instance_to_color[jk][1]), int(instance_to_color[jk][2])) 
+                cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), color, 4)
+                iou = new_ious[cam_idx]
+                textLabel = '{}: {}, {}'.format(key,int(100*new_probs[jk]), int(100*iou))
+                all_dets.append((key,100*new_probs[jk], iou))
+                (retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
+                textOrg = (real_x1, real_y1)
+                cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 1)
+                cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
+                cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+
+                result_img_list.append(np.copy(img))
+            print(all_dets)
+            concat_img = get_concat_img(result_img_list)
+            cv2.imshow('final_output', concat_img)
+            cv2.waitKey(0)
+
+def apply_regr(x, y, w, h, tx, ty, tw, th):
+	try:
+		cx = x + w/2.
+		cy = y + h/2.
+		cx1 = tx * w + cx
+		cy1 = ty * h + cy
+		w1 = math.exp(tw) * w
+		h1 = math.exp(th) * h
+		x1 = cx1 - w1/2.
+		y1 = cy1 - h1/2.
+		x1 = int(round(x1))
+		y1 = int(round(y1))
+		w1 = int(round(w1))
+		h1 = int(round(h1))
+
+		return x1, y1, w1, h1
+
+	except ValueError:
+		return x, y, w, h
+	except OverflowError:
+		return x, y, w, h
+	except Exception as e:
+		print(e)
+		return x, y, w, h
+
+def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox_threshold, num_cam, is_demo) : 
+    '''
+    input :
+        ROIs_list #(num_cam, B, num_samples, 4)
+    '''
+    class_mapping = args.class_list
+    bboxes = {}
+    probs = {}
+    ious = {}
+    # Calculate bboxes coordinates on resized image
+    for ii in range(P_cls.shape[1]):
+        # Ignore 'bg' class
+        #if np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1) : 
+        #    continue
+
+        if np.max(P_cls[0, ii, :]) < bbox_threshold and is_demo :
+            continue
+
+        cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+
+        if cls_name not in bboxes:
+            bboxes[cls_name] = [[] for _ in range(num_cam)]
+            probs[cls_name] = []
+            ious[cls_name] = []
+
+        cls_num = np.argmax(P_cls[0, ii, :])
+        
+        cam_offset = (len(args.class_mapping) - 1) * 4
+        for cam_idx in range(num_cam) : 
+            #(x, y, w, h) = ROIs[0, ii, :]
+            
+            (x, y, w, h) = ROIs_list[cam_idx][0, ii, :]
+            try:
+                #(tx, ty, tw, th) = P_regr[0, ii, 4*cls_num:4*(cls_num+1)]
+                (tx, ty, tw, th) = P_regr[0, ii, cam_offset*cam_idx + 4*cls_num : cam_offset*cam_idx + 4*(cls_num+1)]
+                tx /= args.classifier_std_scaling[0]
+                ty /= args.classifier_std_scaling[1]
+                tw /= args.classifier_std_scaling[2]
+                th /= args.classifier_std_scaling[3]
+                x, y, w, h = apply_regr(x, y, w, h, tx, ty, tw, th)
+            except:
+                pass
+            bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
+        probs[cls_name].append(np.max(P_cls[0, ii, :]))
+        ious[cls_name].append(iou_list[ii])
+    return bboxes, probs, ious 
+
+def get_real_coordinates(ratio, x1, y1, x2, y2):
+
+    real_x1 = int(round(x1 // ratio))
+    real_y1 = int(round(y1 // ratio))
+    real_x2 = int(round(x2 // ratio))
+    real_y2 = int(round(y2 // ratio))
+
+    return (real_x1, real_y1, real_x2 ,real_y2)
+
+def draw_nms(nms_list, debug_img, rpn_stride) : 
+    '''
+    input
+        nms_list #list of (300, 4), len = num_cam
+        debug_img #(num_cam, W, H, C)
+    '''
+    nms_np = np.stack(nms_list, 0) #(num_cam, 300, 4)
+    nms_np = nms_np.astype(int)*rpn_stride
+    for cam_idx, nms in enumerate(nms_np) :
+        img = np.copy(debug_img[cam_idx])
+        window_name = 'nms' + str(cam_idx)
+        for box in nms:
+            draw_box(img, box, window_name)
+    cv2.waitKey()
+ 
+def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None):
+    image = np.copy(image)
+    x1, y1, x2, y2 = box
+    cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+    if text:
+        cv2.putText(image, text, (x1+10, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
+        
+    if is_show :
+        image = cv2.resize(image, (320, 180))
+        cv2.imshow(name, image)
+    return image
+
+def calc_emb_dist(embs1, embs2) : 
+    '''
+    calc emb dist for last axis
+    Args :
+        embs1 and embs2 have same shape (ex : (2, 3, 4))
+    Return :
+        dist for last axis (ex : (2, 3))
+    '''
+    return np.sqrt(np.sum(np.square(embs1 - embs2), -1)) 
+
+def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0): 
+    '''
+    Args :
+        emb (shape : m, n)
+        embs (shape : m, k, n)
+        thresh_dist : lower thersh. throw away too small dist (shape : m, )
+    Return :
+        min_dist_idx (shape : m, 1)
+    '''
+    emb_ref = emb[:, np.newaxis, :]
+    dist = calc_emb_dist(emb_ref, embs) #(m, k)
+    dist[np.where(epi_dist > .3)] = np.inf
+
+    if(thresh.size) : 
+        thresh = thresh[:, np.newaxis] #(m, 1)
+        dist[dist<=thresh] = np.inf 
+    min_dist_idx = np.argmin(dist, 1) #(m, )
+    if(is_want_dist):
+        min_dist = dist[np.arange(len(dist)), min_dist_idx]
+        return min_dist_idx, min_dist
+    return min_dist_idx
+
+def draw_box_from_idx(nms_boxes, all_images, idx, rpn_stride, name):
+    cam_idx, nms_idx = idx
+    image = np.copy(all_images[cam_idx])
+    box = nms_boxes[(cam_idx, nms_idx)]
+    box = box.astype(int)*rpn_stride
+    draw_box(image, box, name)
+ 
+def draw_ref_pos_neg(nms_boxes, anchor_pos_neg_idx, debug_img, rpn_stride) : 
+    anc_idx, pos_idx, neg_idx = anchor_pos_neg_idx #(num_sample, 2)
+    for cur_anc_idx, cur_pos_idx, cur_neg_idx in zip(anc_idx, pos_idx, neg_idx) :
+        draw_box_from_idx(nms_boxes, debug_img, cur_anc_idx, rpn_stride, 'anchor')
+        draw_box_from_idx(nms_boxes, debug_img, cur_pos_idx, rpn_stride, 'pos')
+        draw_box_from_idx(nms_boxes, debug_img, cur_neg_idx, rpn_stride, 'neg')
+        cv2.waitKey(0)
+
+

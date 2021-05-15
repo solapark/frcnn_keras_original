@@ -1,10 +1,11 @@
-from keras.layers import Input, Add, Dense, Activation, Flatten, Convolution2D, MaxPooling2D, ZeroPadding2D, \
-    AveragePooling2D, TimeDistributed
+from keras.layers import Input, Add, Dense, Activation, Flatten, Convolution2D, Convolution1D, MaxPooling2D, ZeroPadding2D, \
+    AveragePooling2D, TimeDistributed, Lambda, Concatenate
 
 from keras import backend as K
 
 from keras_frcnn.RoiPoolingConv import RoiPoolingConv
 from keras_frcnn.FixedBatchNormalization import FixedBatchNormalization
+import tensorflow as tf
 
 def get_weight_path():
     return 'resnet50_weights_tf_dim_ordering_tf_kernels.h5'
@@ -52,14 +53,37 @@ class FRCNN_RESNET:
 
     def classifier_layers(self, x, input_shape, trainable=False):
 
-        x = self.conv_block_td(x, 3, [512, 512, 2048], stage=5, block='a', input_shape=input_shape, strides=(2, 2), trainable=trainable)
+        x = self.conv_block_td(x, 3, [512, 512, 2048], stage=10, block='a', input_shape=input_shape, strides=(2, 2), trainable=trainable)
 
-        x = self.identity_block_td(x, 3, [512, 512, 2048], stage=5, block='b', trainable=trainable)
-        x = self.identity_block_td(x, 3, [512, 512, 2048], stage=5, block='c', trainable=trainable)
+        x = self.identity_block_td(x, 3, [512, 512, 2048], stage=10, block='b', trainable=trainable)
+        x = self.identity_block_td(x, 3, [512, 512, 2048], stage=10, block='c', trainable=trainable)
         x = TimeDistributed(AveragePooling2D((7, 7)), name='avg_pool')(x)
 
         return x
 
+    def ven(self, shared_layer, indices, ven_feat_size):
+        '''
+        input : shared_layer #(batch_size, H, W, A, C)
+                indices #(batch_size, 300, 2)
+                    contents of last axis 
+                        first : H idx
+                        Second : W idx
+        output : view_embedding #(batch_size, 1, 300, ven_size)
+        '''
+        x = Lambda(lambda x: tf.gather_nd(x[0], x[1], batch_dims=1), name='ven_gather_nd')([shared_layer, indices])
+        x = Convolution1D(512, 1, padding='same', activation='relu', kernel_initializer='normal', name='ven_conv1')(x)
+        x = Convolution1D(512, 1, padding='same', activation='relu', kernel_initializer='normal', name='ven_conv2')(x)
+        x = Convolution1D(ven_feat_size, 1, activation='sigmoid', kernel_initializer='uniform', name='ven_out')(x)
+        x = Lambda(lambda x: K.l2_normalize(x, -1), name='ven_l2norm')(x)
+
+        x = Lambda(lambda x: K.expand_dims(x, 1), name='vi_expand_dim')(x)
+        return x
+
+    def ven_conc(self, ven_outs):
+        #view_invariants x : list of (B, 1, 300, C)
+        return Concatenate(axis=1, name='ven_conc')(ven_outs)
+ 
+ 
     def rpn(self, base_layers,num_anchors):
         x = Convolution2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1')(base_layers)
 
@@ -68,19 +92,21 @@ class FRCNN_RESNET:
 
         return [x_class, x_regr, base_layers]
 
-    def classifier(self, base_layers, input_rois, num_rois, nb_classes, trainable=False):
+    def classifier(self, base_layers, input_rois, num_rois, num_cam, nb_classes, trainable=False):
 
         pooling_regions = 14
         input_shape = (num_rois,14,14,1024)
 
-        out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
+        reduce_channel = Convolution2D(512//num_cam, (3, 3), activation='relu', padding='same', name='reduce_channel')
+        out_roi_pools = []
+        for i in range(num_cam):
+            reduced_base_layer = reduce_channel(base_layers[i])
+            out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([reduced_base_layer, input_rois[i]])) #(1, 4, 7, 7, 512)
+        out_roi_pool = Concatenate(axis=-1, name='ViewPooling')(out_roi_pools)
         out = self.classifier_layers(out_roi_pool, input_shape=input_shape, trainable=True)
-
         out = TimeDistributed(Flatten())(out)
-
-        out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'), name='dense_class_{}'.format(nb_classes))(out)
-        # note: no regression target for bg class
-        out_regr = TimeDistributed(Dense(4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='dense_regress_{}'.format(nb_classes))(out)
+        out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'), name='classifier_class_{}'.format(nb_classes))(out)
+        out_regr = TimeDistributed(Dense(num_cam* 4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='classifier_regress_{}'.format(nb_classes))(out)
         return [out_class, out_regr]
 
     def get_img_output_length(self, width, height):

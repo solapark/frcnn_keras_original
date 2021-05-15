@@ -10,18 +10,32 @@ parser.add_argument('--mode', type=str, default='test', choices=['train', 'val',
 parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
-parser.add_argument('--model', type=str, default='frcnn')
+parser.add_argument('--model', type=str, default='mv_frcnn')
 parser.add_argument('--base_net', type=str, default='frcnn_resnet')
 parser.add_argument('--mv', type=bool, default=False)
 
 
-parser.add_argument('--num_cam', type=int, default=3)
+parser.add_argument('--num_cam', type=int, default=9)
+parser.add_argument('--num_valid_cam', type=int, default=3)
+parser.add_argument('--num_nms', type=int, default=300,
+                    help='number of non maximum suppression')
+parser.add_argument('--nms_overlap_thresh', type=float, default=.7,
+                    help='If iou in NMS is larger than this threshold, drop the box')
+
+
 parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
-parser.add_argument("--dataset", default = 'INTERPARK18', help="Path to training data.")
-parser.add_argument("--train_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/train.json', help="Path to training data.")
-parser.add_argument("--val_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/val.json',  help="Path to val data.")
+parser.add_argument("--dataset", default = 'MESSYTABLE', help="Path to training data.")
+parser.add_argument("--img_dir", default = '/data1/sap/MessyTable/images', help="dir of images")
+parser.add_argument("--train_path", default = '/data1/sap/MessyTable/labels/train_tmp.json', help="Path to training data.")
+parser.add_argument("--val_path", default = '/data1/sap/MessyTable/labels/val.json',  help="Path to val data.")
+'''
+parser.add_argument("--dataset", default = 'INTERPARK2', help="Path to training data.")
+parser.add_argument("--img_dir", default = '/data1/sap/interpark_devkit/data/Images', help="dir of images")
+parser.add_argument("--train_path", default = '/data3/sap/INTERPARK/train.json', help="Path to training data.")
+parser.add_argument("--val_path", default = '/data3/sap/INTERPARK/val.json',  help="Path to val data.")
+'''
 parser.add_argument("--val_models_path", help="Path to val models.")
 parser.add_argument("--test_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
@@ -33,8 +47,8 @@ parser.add_argument("-vf", '--use_vertical_flips', help="Augment with vertical f
 parser.add_argument("-rot", "--rot_90", help="Augment with 90 degree rotations in training. (Default=false).", action="store_true", default=False)
 
 #log
-parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
-parser.add_argument("--print_every", default=10, help="print every iter")
+parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'ven', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
+parser.add_argument("--print_every", default=10, type=int, help="print every iter")
 
 #train_spec
 parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
@@ -75,6 +89,17 @@ parser.add_argument('--rpn_max_overlap', type=float, default=.7,
 parser.add_argument('--rpn_min_overlap', type=float, default=.3,
                     help='threshold for negative sample')
 
+#ven
+parser.add_argument('--ven_feat_size', type=int, default=128, help='output rpn maximum number of samples')
+parser.add_argument('--reid_gt_min_overlap', type=float, default=.3,
+                    help='minimum iou to match pred box and gt box')
+parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
+parser.add_argument('--reid_min_emb_dist', type=float, default=.14,
+                    help='minimum embedding distance to match two pred boxes')
+
+
+
+
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
 parser.add_argument('--classifier_regr_std', nargs=4, default=[8.0, 8.0, 4.0, 4.0],
@@ -83,6 +108,8 @@ parser.add_argument('--classifier_max_overlap', type=float, default=.5,
                     help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=.1,
                     help='threshold for negative sample')
+parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0],
+                    help='scaling the standard deviation. x1, x2, y1, y2')
 
 args = parser.parse_args()
 

@@ -1,0 +1,4 @@
+21.05.14
+How to combine epipolar and embedding matching.
+May add this line to utility.py:862
+    dist[np.where(epi_dist > .3)] = np.inf
