@@ -2,6 +2,7 @@ import numpy as np
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from utility import calc_emb_dist
+from epipolar import EPIPOLAR
 import cv2
 
 class REID:
@@ -16,6 +17,8 @@ class REID:
         self.num_nms_arange = np.arange(self.num_nms)
         self.num_nms_arange_repeat = np.repeat(self.num_nms_arange, self.num_valid_cam).reshape(self.num_nms, self.num_valid_cam, 1).transpose(1, 0, 2)
         self.box_idx_stack = np.concatenate([self.cam_idx, self.num_nms_arange_repeat], 2).reshape(self.num_valid_cam*self.num_nms, 2) #(num_valid_cam*num_nms, 2)
+
+        self.epipolar = EPIPOLAR(self.intrin, args)
  
     def get_min_emb_dist_idx(self, emb, embs, thresh = np.zeros(0), is_want_dist = 0, epi_dist = None): 
         '''
@@ -92,7 +95,7 @@ class REID:
             cand_emb = pred_box_emb[target_cam_idx]
             cand_box = pred_box[target_cam_idx]
 
-            epi_dist = epi.get_epipolar_dist(ref_cam_idx, target_cam_idx, ref_box, cand_box, extrins[ref_cam_idx], extrins[target_cam_idx])
+            epi_dist = self.epipolar.get_epipolar_dist(ref_cam_idx, target_cam_idx, ref_box, cand_box, extrins[ref_cam_idx], extrins[target_cam_idx])
             min_dist_idx, min_dist = self.get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True, epi_dist = epi_dist)
             reid_box[self.num_nms_arange, target_cam_idx] = pred_box[target_cam_idx, min_dist_idx]
             dist[self.num_nms_arange, target_cam_idx] = min_dist
