@@ -28,12 +28,12 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         for idx in range(len(train_dataloader)):
         #for idx in range(2):
             timer_data.tic()
-            X_raw, Y = train_dataloader[idx]
+            X_raw, extrin, Y = train_dataloader[idx]
             X = img_preprocessor.process_batch(X_raw)
             timer_data.hold()
 
             timer_model.tic()
-            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw)
+            loss, num_calssifier_pos_samples = model.train_batch(X, extrin, Y, X_raw)
 
             timer_model.hold()
             log_manager.add(loss, 'loss')

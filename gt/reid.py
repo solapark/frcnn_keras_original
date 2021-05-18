@@ -18,7 +18,7 @@ class REID:
         self.num_nms_arange_repeat = np.repeat(self.num_nms_arange, self.num_valid_cam).reshape(self.num_nms, self.num_valid_cam, 1).transpose(1, 0, 2)
         self.box_idx_stack = np.concatenate([self.cam_idx, self.num_nms_arange_repeat], 2).reshape(self.num_valid_cam*self.num_nms, 2) #(num_valid_cam*num_nms, 2)
 
-        self.epipolar = EPIPOLAR(self.intrin, args)
+        self.epipolar = EPIPOLAR(args)
  
     def get_min_emb_dist_idx(self, emb, embs, thresh = np.zeros(0), is_want_dist = 0, epi_dist = None): 
         '''

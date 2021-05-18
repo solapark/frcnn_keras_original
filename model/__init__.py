@@ -47,5 +47,5 @@ class Model :
     def predict(self, X):
         return self.model.predict(X) 
 
-    def train_batch(self, X, Y, debug_img):
-        return self.model.train_batch(X, Y, debug_img) 
+    def train_batch(self,*args):
+        return self.model.train_batch(*args) 

@@ -885,9 +885,10 @@ def draw_ref_pos_neg(nms_boxes, anchor_pos_neg_idx, debug_img, rpn_stride) :
         draw_box_from_idx(nms_boxes, debug_img, cur_neg_idx, rpn_stride, 'neg')
         cv2.waitKey(0)
 
-def get_intrin(self, json_path, num_valid_cam):
+def get_intrin(json_path, num_valid_cam):
     import json
     with open(json_path) as fp: 
         c = json.load(fp)
         intrin_dict = c['intrinsics']
         intrin_list = list(intrin_dict.values())[:num_valid_cam]
+    return np.array(intrin_list).reshape(num_valid_cam, 3, 3)

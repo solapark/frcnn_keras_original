@@ -1,6 +1,6 @@
 class EPIPOLAR :
-    def __init__(self, intrin, args):
-        self.intrin = intrin #(num_valid_cam, 6)
+    def __init__(self, args):
+        self.intrin = args.intrin #(num_valid_cam, 3, 3)
         self.diag = np.sqrt(args.width**2 + args.height**2)
 
     def ext_a2b(self, ext_a, ext_b):
@@ -41,8 +41,8 @@ class EPIPOLAR :
             cam2_idx #int
             bbox list1 #(N, 4)
             bbox list2 #(M, 4)
-            extrin1 #(3,3)
-            extrin2 #(3,3)
+            extrin1 #(6, )
+            extrin2 #(6, )
         outputs :
             dist #(N, M)
                 dist[i, j] = distance between jth box in cam2 and epipolar line on cam2 drawn by ith box in cam1 

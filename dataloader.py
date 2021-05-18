@@ -33,6 +33,9 @@ class DATALOADER :
 
         self.image_dataloader = IMAGE_DATALOADER(img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
+        extrinsic_list = self.get_extrinsic_list(data)
+        self.extrinsic_dataloader = LABEL_DATALOADER(extrinsic_list, self.batch_size)
+
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
             self.label_dataloader = LABEL_DATALOADER(self.resized_instance_list, self.batch_size)
@@ -52,6 +55,16 @@ class DATALOADER :
                 path_dict[int(cam_idx)] = os.path.join(self.img_dir, camera_content['pathname'])
             img_path_list.append(path_dict)
         return img_path_list
+
+    def get_extrinsic_list(self, json)
+        extrinsic_list = []
+        for scene_content in list(json['scenes'].values()):
+            cur_extrinsic_list = []
+            for cam_idx, camera_content in list(scene_content['cameras'].items()) :
+                if int(cam_idx) > self.num_valid_cam : continue
+                    cur_extrinsic_list.append(camera_content['extrinsics'])
+            extrinsic_list.append(cur_extrinsic_list)    
+        return extrinsic_list
 
     def get_instance_list(self, json, width, height, resized_width, resized_height):
         zoom_in_w = resized_width / float(width)
@@ -81,9 +94,9 @@ class DATALOADER :
 
     def __getitem__(self, idx):
         if self.mode == 'demo':
-            return self.image_dataloader[idx]
+            return self.image_dataloader[idx], self.extrinsic_dataloader[idx]
         elif self.mode == 'train' or self.mode == 'test' or self.mode == 'val':
-            return self.image_dataloader[idx], self.label_dataloader[idx]
+            return self.image_dataloader[idx], self.extrinsic_dataloader[idx], self.label_dataloader[idx] 
 
     def on_epoch_end(self):
         if(self.shuffle) : 
