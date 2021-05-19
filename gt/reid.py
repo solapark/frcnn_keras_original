@@ -31,7 +31,8 @@ class REID:
         '''
         emb_ref = emb[:, np.newaxis, :]
         dist = calc_emb_dist(emb_ref, embs) #(m, k)
-        dist[np.where(epi_dist > self.args.epi_dist_thresh)] = np.inf if epi_dist
+        if epi_dist :
+            dist[np.where(epi_dist > self.args.epi_dist_thresh)] = np.inf
 
         if(thresh.size) : 
             thresh = thresh[:, np.newaxis] #(m, 1)
@@ -89,13 +90,17 @@ class REID:
 
         ref_cam_idx, ref_box, ref_emb = self.get_ref(pred_box_prob, pred_box, pred_box_emb)
         reid_box[self.num_nms_arange, ref_cam_idx] = ref_box
-        
+        self.epipolar.calc_T_a2b(extrins)
+ 
         for offset in range(1, self.num_valid_cam):
             target_cam_idx = (ref_cam_idx + offset) % self.num_valid_cam
             cand_emb = pred_box_emb[target_cam_idx]
             cand_box = pred_box[target_cam_idx]
 
-            epi_dist = self.epipolar.get_epipolar_dist(ref_cam_idx, target_cam_idx, ref_box, cand_box, extrins[ref_cam_idx], extrins[target_cam_idx])
+            epi_dist = np.ones((self.num_nms, self.num_nms))
+            for i in range(self.num_nms):
+                epi_dist[i] = self.epipolar.get_epipolar_dist(ref_cam_idx[i], target_cam_idx[i], ref_box[i].reshape(-1, 4), cand_box[i])
+
             min_dist_idx, min_dist = self.get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True, epi_dist = epi_dist)
             reid_box[self.num_nms_arange, target_cam_idx] = pred_box[target_cam_idx, min_dist_idx]
             dist[self.num_nms_arange, target_cam_idx] = min_dist

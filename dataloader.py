@@ -56,15 +56,15 @@ class DATALOADER :
             img_path_list.append(path_dict)
         return img_path_list
 
-    def get_extrinsic_list(self, json)
+    def get_extrinsic_list(self, json) :
         extrinsic_list = []
         for scene_content in list(json['scenes'].values()):
             cur_extrinsic_list = []
             for cam_idx, camera_content in list(scene_content['cameras'].items()) :
                 if int(cam_idx) > self.num_valid_cam : continue
-                    cur_extrinsic_list.append(camera_content['extrinsics'])
+                cur_extrinsic_list.append(camera_content['extrinsics'])
             extrinsic_list.append(cur_extrinsic_list)    
-        return extrinsic_list
+        return np.array(extrinsic_list)
 
     def get_instance_list(self, json, width, height, resized_width, resized_height):
         zoom_in_w = resized_width / float(width)
@@ -102,6 +102,7 @@ class DATALOADER :
         if(self.shuffle) : 
             np.random.shuffle(self.indices)
         self.image_dataloader.set_indices(self.indices)
+        self.extrinsic_dataloader.set_indices(self.indices)
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.label_dataloader.set_indices(self.indices)
 

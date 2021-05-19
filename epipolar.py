@@ -1,7 +1,11 @@
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
 class EPIPOLAR :
     def __init__(self, args):
         self.intrin = args.intrin #(num_valid_cam, 3, 3)
         self.diag = np.sqrt(args.width**2 + args.height**2)
+        self.num_valid_cam = args.num_valid_cam
 
     def ext_a2b(self, ext_a, ext_b):
         T_a2r = np.eye(4)
@@ -34,20 +38,27 @@ class EPIPOLAR :
     def find_dist(self, pt1, pt2):
         return ((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2) ** 0.5
 
-    def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1, bbox_list2, extrin1, extrin2):
+    def calc_T_a2b(self, extrin):
+        #input : extrin #(num_valid_cam, 6)
+        self.T_a2b = np.zeros((self.num_valid_cam, self.num_valid_cam, 4, 4))
+        for i in range(self.num_valid_cam):
+            for j in range(self.num_valid_cam):
+                if(i == j): continue
+                self.T_a2b[i, j] = self.ext_a2b(extrin[i], extrin[j])
+        
+    def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1, bbox_list2):
         '''
         inputs:
             cam1_idx #int
             cam2_idx #int
             bbox list1 #(N, 4)
             bbox list2 #(M, 4)
-            extrin1 #(6, )
-            extrin2 #(6, )
         outputs :
             dist #(N, M)
                 dist[i, j] = distance between jth box in cam2 and epipolar line on cam2 drawn by ith box in cam1 
         '''
-        T_a2b = self.ext_a2b(extrin1, extrin2)
+        #T_a2b = self.ext_a2b(extrin1, extrin2)
+        T_a2b = self.T_a2b[cam1_idx, cam2_idx]
 
         dist_matrix = np.zeros((len(bbox_list1), len(bbox_list2)))
 
@@ -63,13 +74,13 @@ class EPIPOLAR :
                 bbox1_3dpt = np.array([*bbox1_3dpt.tolist(), 1])
 
                 bbox1_in2_3dpt = np.matmul(T_a2b, bbox1_3dpt)[:3]
-                bbox1_in2_2dpt = np.matmul(intrin[cam2_idx], bbox1_in2_3dpt)
+                bbox1_in2_2dpt = np.matmul(self.intrin[cam2_idx], bbox1_in2_3dpt)
                 bbox1_in2_2dpt = bbox1_in2_2dpt[:2] / bbox1_in2_2dpt[2]
 
                 # camera 1 epipole in camera 2
                 epipole1_3dpt = np.array([0, 0, 0, 1])
                 epipole1_in2_3dpt = np.matmul(T_a2b, epipole1_3dpt)[:3]
-                epipole1_in2_2dpt = np.matmul(intrin[cam2_idx], epipole1_in2_3dpt)
+                epipole1_in2_2dpt = np.matmul(self.intrin[cam2_idx], epipole1_in2_3dpt)
                 epipole1_in2_2dpt = epipole1_in2_2dpt[:2] / epipole1_in2_2dpt[2]
 
                 # find epipolar line
