@@ -19,8 +19,9 @@ class REID:
         self.box_idx_stack = np.concatenate([self.cam_idx, self.num_nms_arange_repeat], 2).reshape(self.num_valid_cam*self.num_nms, 2) #(num_valid_cam*num_nms, 2)
 
         self.epipolar = EPIPOLAR(args)
+        self.args = args
  
-    def get_min_emb_dist_idx(self, emb, embs, thresh = np.zeros(0), is_want_dist = 0, epi_dist = None): 
+    def get_min_emb_dist_idx(self, emb, embs, thresh = np.zeros(0), is_want_dist = 0, epi_dist = np.zeros(0)): 
         '''
         Args :
             emb (shape : m, n)
@@ -31,7 +32,7 @@ class REID:
         '''
         emb_ref = emb[:, np.newaxis, :]
         dist = calc_emb_dist(emb_ref, embs) #(m, k)
-        if epi_dist :
+        if epi_dist.any() :
             dist[np.where(epi_dist > self.args.epi_dist_thresh)] = np.inf
 
         if(thresh.size) : 
