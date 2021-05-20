@@ -1,11 +1,33 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import utility
+import cv2
 
 class EPIPOLAR :
     def __init__(self, args):
         self.intrin = args.intrin #(num_valid_cam, 3, 3)
-        self.diag = np.sqrt(args.width**2 + args.height**2)
+        self.diag = np.sqrt(args.resized_width**2 + args.resized_height**2)
         self.num_valid_cam = args.num_valid_cam
+        self.rpn_stride = args.rpn_stride
+
+    def reset(self, extrins, debug_imgs) :
+        self.calc_T_a2b(extrins)
+        self.calc_epipole()
+        self.debug_imgs = debug_imgs
+
+    def draw_result(self, cam1_idx, cam2_idx, box1, box2, foot, a, b, c):
+        src_img = self.debug_imgs[cam1_idx]
+        dst_img = self.debug_imgs[cam2_idx]
+        src_reuslt_img = utility.draw_box(src_img, box1, name = None, color = (0, 0, 255), is_show = False)
+        dst_reuslt_img = utility.draw_box(dst_img, box2, name = None, color = (0, 0, 255), is_show = False)
+        dst_reuslt_img = utility.draw_line(dst_reuslt_img, (0, int(-c/b)), (int(-c/a), 0))
+        dst_reuslt_img = utility.draw_line(dst_reuslt_img, (0, int(-c/b)), (int(-c/a), 0))
+        dst_reuslt_img = cv2.circle(dst_reuslt_img, tuple(map(int, foot)), 5, (0, 0, 255), -1)
+
+        img_list = [src_reuslt_img, dst_reuslt_img]
+        concat_img = utility.get_concat_img(img_list, cols=2)
+        cv2.imshow('epipolar', concat_img)
+        cv2.waitKey(0)
 
     def ext_a2b(self, ext_a, ext_b):
         T_a2r = np.eye(4)
@@ -46,6 +68,16 @@ class EPIPOLAR :
                 if(i == j): continue
                 self.T_a2b[i, j] = self.ext_a2b(extrin[i], extrin[j])
         
+    def calc_epipole(self) :
+        self.epipole = np.zeros((self.num_valid_cam, self.num_valid_cam, 2))
+        epipole1_3dpt = np.array([0, 0, 0, 1])
+        for i in range(self.num_valid_cam):
+            for j in range(self.num_valid_cam) :
+                if(i==j) : continue
+                epipole1_in2_3dpt = np.matmul(self.T_a2b[i, j], epipole1_3dpt)[:3]
+                epipole1_in2_2dpt = np.matmul(self.intrin[j], epipole1_in2_3dpt)
+                self.epipole[i, j] = epipole1_in2_2dpt[:2] / epipole1_in2_2dpt[2]
+
     def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1, bbox_list2):
         '''
         inputs:
@@ -63,34 +95,39 @@ class EPIPOLAR :
         dist_matrix = np.zeros((len(bbox_list1), len(bbox_list2)))
 
         for i in range(len(bbox_list1)):
+            b1x1, b1y1, b1x2, b1y2 = bbox_list1[i] * self.rpn_stride
+            bbox1_2dpt = ((b1x1 + b1x2) / 2, (b1y1 + b1y2) / 2)
+
+            # bbox 1 in camera 2
+            bbox1_3dpt = np.matmul(np.linalg.inv(self.intrin[cam1_idx]), np.array([*bbox1_2dpt, 1]))
+            bbox1_3dpt = np.array([*bbox1_3dpt.tolist(), 1])
+
+            bbox1_in2_3dpt = np.matmul(T_a2b, bbox1_3dpt)[:3]
+            bbox1_in2_2dpt = np.matmul(self.intrin[cam2_idx], bbox1_in2_3dpt)
+            bbox1_in2_2dpt = bbox1_in2_2dpt[:2] / bbox1_in2_2dpt[2]
+
+            # camera 1 epipole in camera 2
+            epipole1_in2_2dpt = self.epipole[cam1_idx, cam2_idx]
+
+            # find epipolar line
+            a, b, c = self.find_line(bbox1_in2_2dpt, epipole1_in2_2dpt)
+
             for j in range(len(bbox_list2)):
-                b1x1, b1y1, b1x2, b1y2 = bbox_list1[i]
-                b2x1, b2y1, b2x2, b2y2 = bbox_list2[j]
-                bbox1_2dpt = ((b1x1 + b1x2) / 2, (b1y1 + b1y2) / 2)
+                b2x1, b2y1, b2x2, b2y2 = bbox_list2[j] * self.rpn_stride
                 bbox2_2dpt = ((b2x1 + b2x2) / 2, (b2y1 + b2y2) / 2)
-
-                # bbox 1 in camera 2
-                bbox1_3dpt = np.matmul(np.linalg.inv(self.intrin[cam1_idx]), np.array([*bbox1_2dpt, 1]))
-                bbox1_3dpt = np.array([*bbox1_3dpt.tolist(), 1])
-
-                bbox1_in2_3dpt = np.matmul(T_a2b, bbox1_3dpt)[:3]
-                bbox1_in2_2dpt = np.matmul(self.intrin[cam2_idx], bbox1_in2_3dpt)
-                bbox1_in2_2dpt = bbox1_in2_2dpt[:2] / bbox1_in2_2dpt[2]
-
-                # camera 1 epipole in camera 2
-                epipole1_3dpt = np.array([0, 0, 0, 1])
-                epipole1_in2_3dpt = np.matmul(T_a2b, epipole1_3dpt)[:3]
-                epipole1_in2_2dpt = np.matmul(self.intrin[cam2_idx], epipole1_in2_3dpt)
-                epipole1_in2_2dpt = epipole1_in2_2dpt[:2] / epipole1_in2_2dpt[2]
-
-                # find epipolar line
-                a, b, c = self.find_line(bbox1_in2_2dpt, epipole1_in2_2dpt)
 
                 foot = self.find_foot(a, b, c, bbox2_2dpt)
                 dist = self.find_dist(bbox2_2dpt, foot)
 
                 # measure distance
                 dist_matrix[i, j] = dist
+
+                '''
+                print('epi pole', -c/b, -c/a)
+                print('dist', dist/self.diag)
+                print('foot', foot)
+                self.draw_result(cam1_idx, cam2_idx, bbox_list1[i] * self.rpn_stride, bbox_list2[j] * self.rpn_stride, foot, a, b, c)
+                '''
 
         # normalize by diagonal line
         dist_matrix = dist_matrix / self.diag

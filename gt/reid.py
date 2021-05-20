@@ -1,7 +1,7 @@
 import numpy as np
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from utility import calc_emb_dist
+import utility
 from epipolar import EPIPOLAR
 import cv2
 
@@ -31,7 +31,7 @@ class REID:
             min_dist_idx (shape : m, 1)
         '''
         emb_ref = emb[:, np.newaxis, :]
-        dist = calc_emb_dist(emb_ref, embs) #(m, k)
+        dist = utility.calc_emb_dist(emb_ref, embs) #(m, k)
         if epi_dist.any() :
             dist[np.where(epi_dist > self.args.epi_dist_thresh)] = np.inf
 
@@ -72,7 +72,7 @@ class REID:
             dist_batch.append(dist)
         return np.array(reid_box_pred_batch), np.array(is_valid_batch), np.array(dist_batch)
 
-    def get_reid_box(self, pred_box, pred_box_emb, pred_box_prob, extrins):
+    def get_reid_box(self, pred_box, pred_box_emb, pred_box_prob, extrins, debug_img_np):
         """get ref idx, postive idx, negative idx for reid training
             Args : 
                 pred_box : x1, y1, x2, y2 #(num_valid_cam, 300, 4)
@@ -91,7 +91,7 @@ class REID:
 
         ref_cam_idx, ref_box, ref_emb = self.get_ref(pred_box_prob, pred_box, pred_box_emb)
         reid_box[self.num_nms_arange, ref_cam_idx] = ref_box
-        self.epipolar.calc_T_a2b(extrins)
+        self.epipolar.reset(extrins, debug_img_np)
  
         for offset in range(1, self.num_valid_cam):
             target_cam_idx = (ref_cam_idx + offset) % self.num_valid_cam
@@ -138,9 +138,9 @@ class REID:
                         color = (0, 0, 100)
                     else :
                         color = (0, 0, 0)
-                    reuslt_img = draw_box(img_list[cam_idx], box, name = None, color = color, is_show = False, text = '%.2f'%dist)
+                    reuslt_img = utility.draw_box(img_list[cam_idx], box, name = None, color = color, is_show = False, text = '%.2f'%dist)
                     result_img_list.append(reuslt_img)
-                concat_img = get_concat_img(result_img_list)
+                concat_img = utility.get_concat_img(result_img_list)
                 cv2.imshow('reid', concat_img)
                 cv2.waitKey(waitKey)
 

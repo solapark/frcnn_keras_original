@@ -838,6 +838,11 @@ def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None)
         cv2.imshow(name, image)
     return image
 
+def draw_line(img, pt1, pt2, color = (0, 255, 0)):
+    img = np.copy(img)
+    img = cv2.line(img, pt1, pt2, color, 5)
+    return img
+
 def calc_emb_dist(embs1, embs2) : 
     '''
     calc emb dist for last axis
