@@ -64,7 +64,7 @@ class DATALOADER :
                 if int(cam_idx) > self.num_valid_cam : continue
                 cur_extrinsic_list.append(camera_content['extrinsics'])
             extrinsic_list.append(cur_extrinsic_list)    
-        return np.array(extrinsic_list)
+        return np.array(extrinsic_list, dtype='float32')
 
     def get_instance_list(self, json, width, height, resized_width, resized_height):
         zoom_in_w = resized_width / float(width)

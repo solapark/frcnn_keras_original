@@ -263,11 +263,9 @@ class MV_FRCNN:
         debug_img_np = np.array(debug_img).transpose(1, 0, 2, 3, 4)
         reid_box_pred_batch, is_valid_batch, dist_batch = self.reid.get_batch(pred_box_batch, view_emb, pred_box_prob_batch, extrin, debug_img_np)
 
-        '''
         ref_cam_batch = self.reid.get_ref_cam_idx_batch(pred_box_prob_batch, pred_box_batch, view_emb)
         debug_img_np = np.array(debug_img).transpose(1, 0, 2, 3, 4)
         self.reid.draw_reid_batch(reid_box_pred_batch, is_valid_batch, ref_cam_batch, debug_img_np, dist_batch, waitKey=0)
-        '''
 
         X2, Y1, Y2, iou_list = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
 

@@ -6,27 +6,45 @@ import cv2
 class EPIPOLAR :
     def __init__(self, args):
         self.intrin = args.intrin #(num_valid_cam, 3, 3)
-        self.diag = np.sqrt(args.resized_width**2 + args.resized_height**2)
         self.num_valid_cam = args.num_valid_cam
+
         self.rpn_stride = args.rpn_stride
+
+        self.width = args.width
+        self.height = args.height
+
+        self.zoom_out_w = args.rpn_stride * self.width/args.resized_width
+        self.zoom_out_h = args.rpn_stride * self.height/args.resized_height
+
+        self.diag = np.sqrt(args.width**2 + args.height**2)
 
     def reset(self, extrins, debug_imgs) :
         self.calc_T_a2b(extrins)
         self.calc_epipole()
         self.debug_imgs = debug_imgs
 
+    def resized_box_to_original_box(self, bbox_list):
+        x1 = bbox_list[:, 0] * self.zoom_out_w
+        y1 = bbox_list[:, 1] * self.zoom_out_h
+        x2 = bbox_list[:, 2] * self.zoom_out_w
+        y2 = bbox_list[:, 3] * self.zoom_out_h
+        return np.column_stack([x1, y1, x2, y2]).astype('int32')
+
     def draw_result(self, cam1_idx, cam2_idx, box1, box2, foot, a, b, c):
-        src_img = self.debug_imgs[cam1_idx]
-        dst_img = self.debug_imgs[cam2_idx]
+        src_img = cv2.resize(self.debug_imgs[cam1_idx], (self.width, self.height)) 
+        dst_img = cv2.resize(self.debug_imgs[cam2_idx], (self.width, self.height))
         src_reuslt_img = utility.draw_box(src_img, box1, name = None, color = (0, 0, 255), is_show = False)
         dst_reuslt_img = utility.draw_box(dst_img, box2, name = None, color = (0, 0, 255), is_show = False)
-        dst_reuslt_img = utility.draw_line(dst_reuslt_img, (0, int(-c/b)), (int(-c/a), 0))
-        dst_reuslt_img = utility.draw_line(dst_reuslt_img, (0, int(-c/b)), (int(-c/a), 0))
+        line_start = (0, int(-c/b))
+        line_end = (int(self.width), int(-a*self.width/b - c))
+        print('line', line_start, line_end)
+        dst_reuslt_img = utility.draw_line(dst_reuslt_img, line_start, line_end)
         dst_reuslt_img = cv2.circle(dst_reuslt_img, tuple(map(int, foot)), 5, (0, 0, 255), -1)
 
         img_list = [src_reuslt_img, dst_reuslt_img]
         concat_img = utility.get_concat_img(img_list, cols=2)
-        cv2.imshow('epipolar', concat_img)
+        resized_concat_img = cv2.resize(concat_img, (640, 360))
+        cv2.imshow('epipolar', resized_concat_img)
         cv2.waitKey(0)
 
     def ext_a2b(self, ext_a, ext_b):
@@ -78,7 +96,7 @@ class EPIPOLAR :
                 epipole1_in2_2dpt = np.matmul(self.intrin[j], epipole1_in2_3dpt)
                 self.epipole[i, j] = epipole1_in2_2dpt[:2] / epipole1_in2_2dpt[2]
 
-    def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1, bbox_list2):
+    def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1_rpn, bbox_list2_rpn):
         '''
         inputs:
             cam1_idx #int
@@ -92,10 +110,16 @@ class EPIPOLAR :
         #T_a2b = self.ext_a2b(extrin1, extrin2)
         T_a2b = self.T_a2b[cam1_idx, cam2_idx]
 
+        # camera 1 epipole in camera 2
+        epipole1_in2_2dpt = self.epipole[cam1_idx, cam2_idx]
+
+        bbox_list1 = self.resized_box_to_original_box(bbox_list1_rpn)
+        bbox_list2 = self.resized_box_to_original_box(bbox_list2_rpn)
+
         dist_matrix = np.zeros((len(bbox_list1), len(bbox_list2)))
 
         for i in range(len(bbox_list1)):
-            b1x1, b1y1, b1x2, b1y2 = bbox_list1[i] * self.rpn_stride
+            b1x1, b1y1, b1x2, b1y2 = bbox_list1[i]
             bbox1_2dpt = ((b1x1 + b1x2) / 2, (b1y1 + b1y2) / 2)
 
             # bbox 1 in camera 2
@@ -106,14 +130,11 @@ class EPIPOLAR :
             bbox1_in2_2dpt = np.matmul(self.intrin[cam2_idx], bbox1_in2_3dpt)
             bbox1_in2_2dpt = bbox1_in2_2dpt[:2] / bbox1_in2_2dpt[2]
 
-            # camera 1 epipole in camera 2
-            epipole1_in2_2dpt = self.epipole[cam1_idx, cam2_idx]
-
             # find epipolar line
             a, b, c = self.find_line(bbox1_in2_2dpt, epipole1_in2_2dpt)
 
             for j in range(len(bbox_list2)):
-                b2x1, b2y1, b2x2, b2y2 = bbox_list2[j] * self.rpn_stride
+                b2x1, b2y1, b2x2, b2y2 = bbox_list2[j]
                 bbox2_2dpt = ((b2x1 + b2x2) / 2, (b2y1 + b2y2) / 2)
 
                 foot = self.find_foot(a, b, c, bbox2_2dpt)
@@ -121,12 +142,12 @@ class EPIPOLAR :
 
                 # measure distance
                 dist_matrix[i, j] = dist
-
                 '''
                 print('epi pole', -c/b, -c/a)
                 print('dist', dist/self.diag)
                 print('foot', foot)
-                self.draw_result(cam1_idx, cam2_idx, bbox_list1[i] * self.rpn_stride, bbox_list2[j] * self.rpn_stride, foot, a, b, c)
+
+                self.draw_result(cam1_idx, cam2_idx, bbox_list1[i], bbox_list2[j], foot, a, b, c)
                 '''
 
         # normalize by diagonal line
