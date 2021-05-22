@@ -106,7 +106,7 @@ class REID:
             reid_box[self.num_nms_arange, target_cam_idx] = pred_box[target_cam_idx, min_dist_idx]
             dist[self.num_nms_arange, target_cam_idx] = min_dist
 
-            invalid_idx = np.where(min_dist < self.reid_min_emb_dist)
+            invalid_idx = np.where(min_dist > self.reid_min_emb_dist)
             invalid_nms_idx = self.num_nms_arange[invalid_idx]
             invalid_target_cam_idx = target_cam_idx[invalid_idx]
             is_valid[invalid_nms_idx, invalid_target_cam_idx] = 0
@@ -138,7 +138,7 @@ class REID:
                         color = (0, 0, 100)
                     else :
                         color = (0, 0, 0)
-                    reuslt_img = utility.draw_box(img_list[cam_idx], box, name = None, color = color, is_show = False, text = '%.2f'%dist)
+                    reuslt_img = utility.draw_box(img_list[cam_idx], box, name = None, color = color, is_show = False, text = 'dist : %.2f'%dist)
                     result_img_list.append(reuslt_img)
                 concat_img = utility.get_concat_img(result_img_list)
                 cv2.imshow('reid', concat_img)
