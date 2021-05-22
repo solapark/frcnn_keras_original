@@ -260,6 +260,8 @@ class MV_FRCNN:
         ven_loss = self.ven.train_on_batch(X + pred_box_idx_batch, ref_pos_neg_idx_batch)
         loss[2] = ven_loss
 
+        #print(loss)
+        return loss, num_pos_samples
         debug_img_np = np.array(debug_img).transpose(1, 0, 2, 3, 4)
         reid_box_pred_batch, is_valid_batch, dist_batch = self.reid.get_batch(pred_box_batch, view_emb, pred_box_prob_batch, extrin, debug_img_np)
 
