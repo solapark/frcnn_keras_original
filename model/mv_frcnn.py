@@ -214,6 +214,7 @@ class MV_FRCNN:
         loss_rpn_regr = sum(loss_rpn[2::2])/self.args.num_valid_cam
         loss[0:2] = [loss_rpn_cls, loss_rpn_regr]
 
+        return loss, num_pos_samples
         '''
         #print(loss_rpn)
         rpn_gt_cls_batch = np.stack([rpn_gt_batch[2*i] for i in range(args.num_valid_cam)]).transpose(1, 0, 2, 3,4)
