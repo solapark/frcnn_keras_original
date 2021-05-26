@@ -116,6 +116,7 @@ class RPN_GT_CALCULATOR:
         neg_anchor_idx = np.delete(neg_anchor_idx, neg_anchor_idx_for_gt_box, 0)
                       
         num_pos, num_neg = len(pos_anchor_idx), len(neg_anchor_idx)
+        '''
         if(num_pos > self.rpn_num_pos_max) : 
             valid_pos_idx = np.random.choice(num_pos, self.rpn_num_pos_max)
             pos_anchor_idx = pos_anchor_idx[valid_pos_idx]
@@ -126,6 +127,7 @@ class RPN_GT_CALCULATOR:
         if(num_pos + num_neg > self.rpn_max_num_sample) : 
             valid_neg_idx = np.random.choice(num_neg, num_pos)
             neg_anchor_idx = neg_anchor_idx[valid_neg_idx]
+        '''
 
         y_is_sample = np.zeros((self.output_height, self.output_width, self.num_anchors))
         y_is_pos = np.zeros((self.output_height, self.output_width, self.num_anchors))

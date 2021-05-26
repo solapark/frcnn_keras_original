@@ -204,16 +204,16 @@ class MV_FRCNN:
         num_pos_samples = 0
 
         rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
-        '''
         rpn_gt_cls_batch = np.stack([rpn_gt_batch[2*i] for i in range(self.args.num_valid_cam)]).transpose(1, 0, 2, 3,4)
         self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img).transpose(1, 0, 2, 3, 4), rpn_gt_cls_batch)
-        '''
+
         loss_rpn = self.rpn.train_on_batch(X, rpn_gt_batch)
 
         loss_rpn_cls = sum(loss_rpn[1::2])/self.args.num_valid_cam
         loss_rpn_regr = sum(loss_rpn[2::2])/self.args.num_valid_cam
         loss[0:2] = [loss_rpn_cls, loss_rpn_regr]
 
+        print(loss_rpn)
         return loss, num_pos_samples
         '''
         #print(loss_rpn)
