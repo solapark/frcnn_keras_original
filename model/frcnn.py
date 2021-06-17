@@ -24,6 +24,7 @@ class FRCNN:
 
         base_net = import_module('model.' + args.base_net.lower()).make_model(args)
         self.rpn, self.classifier, self.classifier_only, self.model_all = self.make_model(args, base_net)
+        #self.compile()
 
     def get_weight_path(self):
         return self.base_net.get_weight_path()
@@ -54,6 +55,7 @@ class FRCNN:
 
     '''
     def make_model(self, args, base_net):
+        model_rpn, model_classifier, model_classifier_only, model_all = None, None, None, None
         roi_input = Input(shape=(None, 4))
         img_input = Input(shape=(None, None, 3))
         shared_layers = base_net.nn_base(img_input, trainable=True)
@@ -70,11 +72,11 @@ class FRCNN:
             classifier_model_input = [classifier_input, roi_input]
 
         classifier = base_net.classifier(classifier_input, roi_input, args.num_rois, nb_classes=len(args.class_mapping), trainable=True)
-        self.model_rpn = Model(img_input, rpn)
-        self.model_classifier = Model(classifier_model_input, classifier)
-        self.model_all = Model([img_input, roi_input], rpn + classifier) if(args.mode == 'train') else None
+        model_rpn = Model(img_input, rpn)
+        model_classifier = Model(classifier_model_input, classifier)
+        model_all = Model([img_input, roi_input], rpn + classifier) if(args.mode == 'train') else None
 
-        return self.model_rpn, self.model_classifier, self.model_all
+        return model_rpn, model_classifier, model_classifier_only, model_all
     '''
 
     def make_model(self, args, base_net):
@@ -100,7 +102,7 @@ class FRCNN:
             model_all = Model([img_input, roi_input], rpn + classifier)
 
             optimizer = Adam(lr=1e-5)
-            model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(self.num_anchors), losses.rpn_loss_regr(self.num_anchors), losses.loss_dummy])
+            model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(self.num_anchors), losses.rpn_loss_regr(self.num_anchors), losses.loss_dummy], loss_weights=[1.0, 1.0, 0])
             model_classifier.compile(optimizer=optimizer, loss=[losses.class_loss_cls, losses.class_loss_regr(len(self.args.class_list)-1)], metrics={f'dense_class_{len(self.args.class_list)}': 'accuracy'})
 
             model_all.compile(optimizer='sgd', loss='mae')
@@ -197,8 +199,10 @@ class FRCNN:
 
         return all_dets
 
-    def train_batch(self, X, Y, rpn_gt_batch):
+    def train_batch(self, X, Y, rpn_gt_batch, debug_img):
         loss = np.array([np.Inf]*5)
+
+        #rpn_gt_batch = utility.pickle_load('rpn_gt_batch.pickle')
         rpn_gt_batch += [np.zeros((1, ))]
         loss_rpn = self.rpn.train_on_batch(X, rpn_gt_batch)
         loss[0:2] = loss_rpn[1:3]
@@ -215,7 +219,18 @@ class FRCNN:
         num_pos_samples = 0
         if X2 is not None:
             X2, Y1, Y2, num_pos_samples = roi_helpers.get_classifier_samples(X2, Y1, Y2, self.args.num_rois)
+            '''
+            #debug
+            cls_box, cls_prob = utility.classfier_output_to_box_prob(X2, Y1, Y2, self.args, 0, 1, False) 
+            utility.draw_cls_box_prob(debug_img, cls_box, cls_prob, self.args, 1, is_nms=False)
+            '''
+
             loss_class = self.classifier.train_on_batch([X, X2], [Y1, Y2])
             loss[2:4] = loss_class[1:3]
             loss[-1] = loss[:-1].sum()
+        '''
+        else :
+            nms_list = [R]
+            utility.draw_nms(nms_list, debug_img, self.args.rpn_stride) 
+        '''
         return loss, num_pos_samples

@@ -7,6 +7,8 @@ import math
 import cv2
 import pickle
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.metrics import average_precision_score
 
@@ -56,8 +58,7 @@ def get_concat_img(img_list, cols=3):
 
 
 
-'''
-def write_config(path, option, C, is_reset):
+def write_config_sv(path, option, C, is_reset):
     if(is_reset):
         f = open(path, 'w')
     else :
@@ -71,7 +72,7 @@ def write_config(path, option, C, is_reset):
     f.write('\n')
     f.close()
 
-class Log_manager:
+class Log_manager_sv:
     def __init__(self, save_dir, reset, header, file_name = 'log.csv'):
         self.path = os.path.join(save_dir, file_name)
         #if(reset): self.write(['mean_overlapping_bboxes', 'class_acc', 'loss_rpn_cls', 'loss_rpn_regr', 'loss_class_cls', 'loss_class_regr', 'time'])
@@ -83,7 +84,6 @@ class Log_manager:
         wr.writerow(c)
         f.close()
 
-'''
 
 class Model_path_manager:
     def __init__(self, args):
@@ -672,3 +672,115 @@ def file_system(args):
         os.system('rm -rf %s'%(save_path))
         os.makedirs(save_path, exist_ok = True)
         os.makedirs(model_path, exist_ok = True)
+
+def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) : 
+    height,_,_ = img_list[0].shape
+    img_min_side = float(args.im_size)
+    ratio = img_min_side/height
+
+    all_dets = []
+    for key in bboxes:
+        bbox = np.array(bboxes[key]) #(num_cam, num_box, 4)
+        if(is_nms):
+            new_boxes_all_cam, new_probs = non_max_suppression_fast_multi_cam(bbox, np.array(probs[key]), overlap_thresh=0.5)
+        else : 
+            new_boxes_all_cam, new_probs = bbox, np.array(probs[key])
+        instance_to_color = [np.random.randint(0, 255, 3) for _ in range(len(new_probs))]
+        for cam_idx in range(num_cam) : 
+            img = img_list[cam_idx].copy()
+            new_boxes = new_boxes_all_cam[cam_idx] #(num_box, 4)
+            for jk in range(new_boxes.shape[0]):
+                (x1, y1, x2, y2) = new_boxes[jk,:]
+                if(x1 == -args.rpn_stride) :
+                    continue 
+                # Calculate real coordinates on original image
+                (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
+
+                color = (int(instance_to_color[jk][0]), int(instance_to_color[jk][1]), int(instance_to_color[jk][2])) 
+                cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), color, 4)
+                textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
+                all_dets.append((key,100*new_probs[jk]))
+                (retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
+                textOrg = (real_x1, real_y1-0)
+                cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 1)
+                cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
+                cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+
+            img_list[cam_idx] = img
+    print(all_dets)
+    plt.figure(figsize=(10,10))
+    for i, img in enumerate(img_list) : 
+        coord = int('1'+str(num_cam)+str(i+1))
+        plt.subplot(coord)
+        plt.imshow(cv2.cvtColor(img,cv2.COLOR_BGR2RGB))
+    plt.show()
+
+def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold, num_cam, is_demo) : 
+    if ROIs_list.ndim == 3 :
+        ROIs_list = np.expand_dims(ROIs_list, 0)
+    #class_mapping = args.num2cls
+    class_mapping = args.class_list
+    bboxes = {}
+    probs = {}
+    # Calculate bboxes coordinates on resized image
+    for ii in range(P_cls.shape[1]):
+        # Ignore 'bg' class
+        #if np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1) : 
+        #    continue
+
+        if np.max(P_cls[0, ii, :]) < bbox_threshold and is_demo :
+            continue
+
+        cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+
+        if cls_name not in bboxes:
+            bboxes[cls_name] = [[] for _ in range(num_cam)]
+            probs[cls_name] = []
+
+        cls_num = np.argmax(P_cls[0, ii, :])
+        
+        cam_offset = (len(args.class_mapping) - 1) * 4
+        for cam_idx in range(num_cam) : 
+            #(x, y, w, h) = ROIs[0, ii, :]
+            (x, y, w, h) = ROIs_list[cam_idx][0, ii, :]
+            try:
+                #(tx, ty, tw, th) = P_regr[0, ii, 4*cls_num:4*(cls_num+1)]
+                (tx, ty, tw, th) = P_regr[0, ii, cam_offset*cam_idx + 4*cls_num : cam_offset*cam_idx + 4*(cls_num+1)]
+                tx /= args.classifier_std_scaling[0]
+                ty /= args.classifier_std_scaling[1]
+                tw /= args.classifier_std_scaling[2]
+                th /= args.classifier_std_scaling[3]
+                x, y, w, h = apply_regr(x, y, w, h, tx, ty, tw, th)
+            except:
+                pass
+            bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
+        probs[cls_name].append(np.max(P_cls[0, ii, :]))
+    return bboxes, probs 
+
+def get_real_coordinates(ratio, x1, y1, x2, y2):
+
+    real_x1 = int(round(x1 // ratio))
+    real_y1 = int(round(y1 // ratio))
+    real_x2 = int(round(x2 // ratio))
+    real_y2 = int(round(y2 // ratio))
+
+    return (real_x1, real_y1, real_x2 ,real_y2)
+
+def draw_nms(nms_list, debug_img, rpn_stride) : 
+    nms_np = np.stack(nms_list, 0) #(num_cam, 300, 4)
+    nms_np = nms_np.astype(int)*rpn_stride
+    for cam_idx, nms in enumerate(nms_np) :
+        img = np.copy(debug_img[cam_idx])
+        window_name = 'nms' + str(cam_idx)
+        for box in nms:
+            draw_box(img, box, window_name)
+    cv2.waitKey()
+ 
+def draw_box(image, box, name, color = (0, 255, 0)):
+    x1, y1, x2, y2 = box
+    cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+    image = cv2.resize(image, (320, 180))
+    cv2.imshow(name, image)
+
+
+
