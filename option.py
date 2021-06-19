@@ -11,11 +11,12 @@ parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
 parser.add_argument('--model', type=str, default='frcnn')
-parser.add_argument('--base_net', type=str, default='frcnn_resnet')
-parser.add_argument('--mv', type=bool, default=False)
+parser.add_argument('--base_net', type=str, default='frcnn_vgg')
 
 
 parser.add_argument('--num_cam', type=int, default=3)
+parser.add_argument('--num_valid_cam', type=int, default=3)
+parser.add_argument('--num_nms', type=int, default=300)
 parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
@@ -33,7 +34,7 @@ parser.add_argument("-vf", '--use_vertical_flips', help="Augment with vertical f
 parser.add_argument("-rot", "--rot_90", help="Augment with 90 degree rotations in training. (Default=false).", action="store_true", default=False)
 
 #log
-parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
+parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'ven', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
 parser.add_argument("--print_every", default=10, help="print every iter")
 
 #train_spec
@@ -48,10 +49,10 @@ parser.add_argument("--reset", help="reset save_dir", action="store_true", defau
 parser.add_argument('--resume', action="store_true", default=False, help='resume from last checkpoint')
 
 #anchor
-parser.add_argument("--anchor_box_scales", nargs=3, default=[128, 256, 512], help="anchor box scales")
+parser.add_argument("--anchor_box_scales", nargs=3, default=[64, 128, 256], help="anchor box scales")
 parser.add_argument('--anchor_box_ratios', type=str, default=[1, 1, 1./math.sqrt(2), 2./math.sqrt(2), 2./math.sqrt(2), 1./math.sqrt(2)],help="anchor box ratios")
 
-parser.add_argument('--im_size', type=int, default=416,
+parser.add_argument('--im_size', type=int, default=600,
                     help='Size to resize the smallest side of the image')
 
 #img normalize
@@ -75,14 +76,25 @@ parser.add_argument('--rpn_max_overlap', type=float, default=.7,
 parser.add_argument('--rpn_min_overlap', type=float, default=.3,
                     help='threshold for negative sample')
 
+#ven
+parser.add_argument('--view_invar_feature_size', type=int, default=128, help='size of reid embedding')
+parser.add_argument('--reid_min_emb_dist', type=float, default=.4, help='minimum embedding distance to match two pred boxes')
+parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
+
+
+#reid_gt
+parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minimum iou to match pred box and gt box')
+
+
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
-parser.add_argument('--classifier_regr_std', nargs=4, default=[8.0, 8.0, 4.0, 4.0],
-                    help='scaling the standard deviation. x1, x2, y1, y2')
-parser.add_argument('--classifier_max_overlap', type=float, default=.5,
-                    help='threshold for positive sample')
-parser.add_argument('--classifier_min_overlap', type=float, default=.1,
-                    help='threshold for negative sample')
+parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
+
+#classifier_gt
+parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
+parser.add_argument('--classifier_max_overlap', type=float, default=.5, help='threshold for positive sample')
+parser.add_argument('--classifier_min_overlap', type=float, default=.1, help='threshold for negative sample')
+
 
 args = parser.parse_args()
 
@@ -96,5 +108,7 @@ args.anchor_wh = [(scale * ratio[0], scale*ratio[1]) for scale in args.anchor_bo
 args.num_anchors = len(args.anchor_box_scales) * len(args.anchor_box_ratios)
 
 get_dataset_info(args)
+args.grid_rows = args.resized_height//args.rpn_stride
+args.grid_cols = args.resized_width//args.rpn_stride
 args.class_list = list(args.class_mapping.keys())
 args.base_dir = args.base_path

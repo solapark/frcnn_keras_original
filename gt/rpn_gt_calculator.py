@@ -145,7 +145,9 @@ class RPN_GT_CALCULATOR:
         
         return y_rpn_cls, y_rpn_regr
 
-    def draw_rpn_gt(self, imgs_in_batch, rpn_cls_in_batch) : 
+    def draw_rpn_gt(self, imgs_in_batch, rpn_gt_batch) : 
+        imgs_in_batch = imgs_in_batch.transpose(1, 0, 2, 3, 4)
+        rpn_cls_in_batch = [np.concatenate(rpn_gt_batch[::2])]
         cv2.namedWindow("img", cv2.WINDOW_NORMAL) 
         color = (0, 0, 255)
         anchor_wh = np.array(self.anchor_wh)

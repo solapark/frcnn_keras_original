@@ -3,9 +3,9 @@ import numpy as np
 import random
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from utils import iou, union, get_concat_img
+from utility import iou, union, get_concat_img
 import cv2
-from data.calc_regr import CALC_REGR
+from gt.calc_regr import CALC_REGR
 
 class CLASSIFIER_GT_CALCULATOR:
     def __init__(self, args):

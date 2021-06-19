@@ -9,6 +9,7 @@ from keras.utils import generic_utils
 import os
 import cv2
 import numpy as np
+import math
 
 def train(args, model, log_manager, img_preprocessor, train_dataloader, val_dataloader) :
     model_path_manager = utility.Model_path_manager(args)
@@ -20,38 +21,27 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
     log_manager.write_log('Num train samples : len(train_dataloader) * num_cam ='+str(len(train_dataloader))+'*'+str(args.num_cam))
 
     timer_data, timer_model = utility.timer(), utility.timer()
-    best_mAP = 0
     for epoch_num in range(args.num_epochs):
         log_manager.write_log('[Epoch %d/%d]'%(epoch_num+1, args.num_epochs))
 
         for idx in range(len(train_dataloader)):
         #for idx in range(10):
             timer_data.tic()
-            X, Y = train_dataloader[idx]
-            X = img_preprocessor.process_batch(X)
-            rpn_gt_batch = rpn_gt_calculator.get_batch(Y)
+            X_raw, Y = train_dataloader[idx]
+            X = img_preprocessor.process_batch(X_raw)
             timer_data.hold()
 
             timer_model.tic()
-            if args.mv :
-                loss, num_calssifier_pos_samples = model.train_batch(X, Y, rpn_gt_batch)
-            else :
-                Y = sv_gt_batch_generator.get_gt_batch(Y)
-                loss_list = []
-                num_calssifier_pos_samples_list = []
-                timer_model.tic()
-                for cam_idx in range(args.num_cam):
-                    x = X[cam_idx]
-                    y = Y[0][cam_idx]
-                    cur_rpn_gt_batch = rpn_gt_batch[cam_idx*2:cam_idx*2+2]
 
-                    loss, num_calssifier_pos_samples = model.train_batch(x, y, cur_rpn_gt_batch)
-                    loss_list.append(loss)
-                    num_calssifier_pos_samples_list.append(num_calssifier_pos_samples)
-                loss = np.array(loss_list).mean(0)
-                num_calssifier_pos_samples = np.array(num_calssifier_pos_samples_list).mean()
+            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw)
 
             timer_model.hold()
+
+            print('loss', loss) 
+            print('num_calssifier_pos_samples', num_calssifier_pos_samples)
+
+            if(loss[-1] == np.inf) : continue 
+
             log_manager.add(loss, 'loss')
             log_manager.add(num_calssifier_pos_samples, 'num_calssifier_pos_samples')
 
@@ -66,19 +56,21 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
             timer_data.tic()
         log_manager.epoch_done()
     
+        '''
         cur_mAP = calc_map(args, model, log_manager, img_preprocessor, val_dataloader)
         if(cur_mAP > best_mAP):
             best_mAP = cur_mAP
             model.save(model_path_manager.get_path('best'))
-        model.save(model_path_manager.get_path('last'))
+        '''
+        model.save(model_path_manager.get_path('%d'%(epoch_num+1)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     map_calculator = utility.Map_calculator(args)
     timer_test = utility.timer()
     progbar = generic_utils.Progbar(len(dataloader))
-    for idx in range(len(dataloader)):
-    #for idx in range(3):
+    #for idx in range(len(dataloader)):
+    for idx in range(3):
         #if(idx%40 !=0) : continue
         imgs_batch, labels_batch = dataloader[idx]
         gt_batch = sv_gt_batch_generator.get_gt_batch(labels_batch)
@@ -139,9 +131,8 @@ if __name__ == '__main__' :
 
     if(args.mode == 'train'):
         train_dataloader = DATALOADER(args, 'train', args.train_path)
-        val_dataloader = DATALOADER(args, 'val', args.val_path)
         #model.load(args.input_weight_path)
-        train(args, model, log_manager, img_preprocessor, train_dataloader, val_dataloader)
+        train(args, model, log_manager, img_preprocessor, train_dataloader, None)
     elif(args.mode == 'val'):
         val_dataloader = DATALOADER(args, 'val', args.val_path)
         #model.load(args.model_load_path)

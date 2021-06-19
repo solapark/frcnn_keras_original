@@ -43,15 +43,55 @@ def rpn_loss_cls(num_anchors):
 
 	return rpn_loss_cls_fixed_num
 
+def view_invariant_loss(alpha=.3):
+    """Loss function for rpn classification
+    Args:
+        y_pred: view invariant features, shape == (1, num_cam, H, W, A, vi_featue_size)
+        y_true: anchor_target idx, shape == (1, 2, num_GT, 4)
+            first : batch_size(dummy)
+            second : anchor or target ?
+            third : GT idx
+            fourth : cam, H, W, A
+    Returns:
+    """
+    def triplet_loss_func(y_true, y_pred):
+        y_true = y_true[0, :, :, :, 0, 0]
+        y_true = tf.cast(y_true, 'int32') #(3, numSample, 4)
+        anchor_idx = y_true[0] #(numSample, 4)
+        pos_idx = y_true[1] #(numSample, 4)
+        neg_idx = y_true[2] #(numSample, 4)
 
-def class_loss_regr(num_classes):
-	def class_loss_regr_fixed_num(y_true, y_pred):
-		x = y_true[:, :, 4*num_classes:] - y_pred
-		x_abs = K.abs(x)
-		x_bool = K.cast(K.less_equal(x_abs, 1.0), 'float32')
-		return lambda_cls_regr * K.sum(y_true[:, :, :4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :4*num_classes])
-	return class_loss_regr_fixed_num
+        anchor = tf.gather_nd(y_pred[0], anchor_idx) #(numSample, vi_feature_size)
+        positive = tf.gather_nd(y_pred[0], pos_idx) #(numSample, vi_feature_size)
+        negative = tf.gather_nd(y_pred[0], neg_idx) #(numSample, vi_feature_size)
 
+        positive_dist = tf.sqrt(tf.reduce_sum(tf.square(anchor - positive), -1)) #(numSample, )
+        negative_dist = tf.sqrt(tf.reduce_sum(tf.square(anchor - negative), -1)) #(numSample, )
+
+        loss_1 = positive_dist - negative_dist + alpha
+        loss = tf.reduce_sum(tf.maximum(loss_1, 0.0)) #()
+
+        return loss
+    return triplet_loss_func
+
+def class_loss_regr(num_classes, num_cam):
+    """Loss function for rpn regression
+    Args:
+        num_anchors: number of anchors (9 in here)
+        num_cam : number of cam (3 in here)
+    Returns:
+        Smooth L1 loss function 
+                           0.5*x*x (if x_abs < 1)
+                           x_abx - 0.5 (otherwise)
+    """
+    def class_loss_regr_fixed_num(y_true, y_pred):
+        #x = y_true[:, :, 4*num_classes:] - y_pred
+        x = y_true[:, :, num_cam*4*num_classes:] - y_pred
+        x_abs = K.abs(x)
+        x_bool = K.cast(K.less_equal(x_abs, 1.0), 'float32')
+        #return lambda_cls_regr * K.sum(y_true[:, :, :4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :4*num_classes])
+        return lambda_cls_regr * K.sum(y_true[:, :, :num_cam*4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :num_cam*4*num_classes])
+    return class_loss_regr_fixed_num
 
 def class_loss_cls(y_true, y_pred):
-	return lambda_cls_class * K.mean(categorical_crossentropy(y_true[0, :, :], y_pred[0, :, :]))
+    return lambda_cls_class * K.mean(categorical_crossentropy(y_true[0, :, :], y_pred[0, :, :]))

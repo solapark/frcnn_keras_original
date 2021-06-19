@@ -614,7 +614,7 @@ class Img_preprocessor:
         img[:, :, 0] -= self.img_channel_mean0
         img[:, :, 1] -= self.img_channel_mean1
         img[:, :, 2] -= self.img_channel_mean2
-        img /= self.img_scaling_factor
+        #img /= self.img_scaling_factor
         #img = np.transpose(img, (2, 0, 1))
         return img
 
@@ -674,7 +674,7 @@ def file_system(args):
         os.makedirs(model_path, exist_ok = True)
 
 def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) : 
-    height,_,_ = img_list[0].shape
+    _, height,_,_ = img_list[0].shape
     img_min_side = float(args.im_size)
     ratio = img_min_side/height
 
@@ -687,7 +687,7 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
             new_boxes_all_cam, new_probs = bbox, np.array(probs[key])
         instance_to_color = [np.random.randint(0, 255, 3) for _ in range(len(new_probs))]
         for cam_idx in range(num_cam) : 
-            img = img_list[cam_idx].copy()
+            img = img_list[cam_idx].squeeze().copy()
             new_boxes = new_boxes_all_cam[cam_idx] #(num_box, 4)
             for jk in range(new_boxes.shape[0]):
                 (x1, y1, x2, y2) = new_boxes[jk,:]
@@ -708,12 +708,17 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
 
             img_list[cam_idx] = img
     print(all_dets)
+    conc_img = get_concat_img(img_list, cols=3)
+    cv2.imshow('cls_result', conc_img)
+    cv2.waitKey()
+    '''
     plt.figure(figsize=(10,10))
     for i, img in enumerate(img_list) : 
         coord = int('1'+str(num_cam)+str(i+1))
         plt.subplot(coord)
         plt.imshow(cv2.cvtColor(img,cv2.COLOR_BGR2RGB))
     plt.show()
+    '''
 
 def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold, num_cam, is_demo) : 
     if ROIs_list.ndim == 3 :
@@ -781,6 +786,37 @@ def draw_box(image, box, name, color = (0, 255, 0)):
     cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
     image = cv2.resize(image, (320, 180))
     cv2.imshow(name, image)
+
+def calc_emb_dist(embs1, embs2) : 
+    '''
+    calc emb dist for last axis
+    Args :
+        embs1 and embs2 have same shape (ex : (2, 3, 4))
+    Return :
+        dist for last axis (ex : (2, 3))
+    '''
+    return np.sqrt(np.sum(np.square(embs1 - embs2), -1)) 
+
+def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0): 
+    '''
+    Args :
+        emb (shape : m, n)
+        embs (shape : m, k, n)
+        thresh_dist : lower thersh. throw away too small dist (shape : m, )
+    Return :
+        min_dist_idx (shape : m, 1)
+    '''
+    emb_ref = emb[:, np.newaxis, :]
+    dist = calc_emb_dist(emb_ref, embs) #(m, k)
+
+    if(thresh.size) : 
+        thresh = thresh[:, np.newaxis] #(m, 1)
+        dist[dist<=thresh] = np.inf 
+    min_dist_idx = np.argmin(dist, 1) #(m, )
+    if(is_want_dist):
+        min_dist = dist[np.arange(len(dist)), min_dist_idx]
+        return min_dist_idx, min_dist
+    return min_dist_idx
 
 
 
