@@ -44,8 +44,8 @@ class Model :
         print('Saving model to', model_path)
         self.model.save(model_path)
 
-    def predict(self, X):
-        return self.model.predict(X) 
+    def predict_batch(self, X):
+        return self.model.predict_batch(X) 
 
     def train_batch(self, X, Y, debug_img):
         return self.model.train_batch(X, Y, debug_img) 

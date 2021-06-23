@@ -18,7 +18,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
 
     log_manager.write_cur_time()
     log_manager.write_log('Training...')
-    log_manager.write_log('Num train samples : len(train_dataloader) * num_cam ='+str(len(train_dataloader))+'*'+str(args.num_cam))
+    log_manager.write_log('Num train samples : len(train_dataloader) * num_valid_cam ='+str(len(train_dataloader))+'*'+str(args.num_valid_cam))
 
     timer_data, timer_model = utility.timer(), utility.timer()
     for epoch_num in range(args.num_epochs):
@@ -65,29 +65,23 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         model.save(model_path_manager.get_path('%d'%(epoch_num+1)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
-    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     map_calculator = utility.Map_calculator(args)
+    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     timer_test = utility.timer()
     progbar = generic_utils.Progbar(len(dataloader))
     #for idx in range(len(dataloader)):
-    for idx in range(3):
-        #if(idx%40 !=0) : continue
-        imgs_batch, labels_batch = dataloader[idx]
-        gt_batch = sv_gt_batch_generator.get_gt_batch(labels_batch)
-        X = img_preprocessor.process_batch(imgs_batch)
-        if args.mv:
-            all_dets = model.predict(X)
-            for cam_idx in range(args.num_cam) : 
-                dets = all_dets[cam_idx]
-                gt = gt_batch[0][cam_idx]
-                map_calculator.add_img_tp(dets, gt) 
-        else: 
-            for cam_idx in range(args.num_cam):
-                x = X[cam_idx]
-                all_dets = model.predict(x)
+    for idx in range(0, len(dataloader), 4):
+        X_raw, Y = dataloader[idx]
+        X = img_preprocessor.process_batch(X_raw)
+        all_dets = model.predict_batch(X)
 
-                gt = gt_batch[0][cam_idx]
-                map_calculator.add_img_tp(all_dets, gt) 
+        gt_batch = sv_gt_batch_generator.get_gt_batch(Y)
+
+        for cam_idx in range(args.num_valid_cam) : 
+            dets = all_dets[cam_idx]
+            gt = gt_batch[0][cam_idx]
+            map_calculator.add_img_tp(dets, gt) 
+
         progbar.update(idx+1)
     
     all_aps = map_calculator.get_aps()
@@ -116,9 +110,11 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
 def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
     model_path_manager = utility.Model_path_manager(args)
     
-    #all_model_path = model_path_manager.get_all_path()
-    all_model_path = model_path_manager.get_all_path()[-2:-1]
+    all_model_path = model_path_manager.get_path_in_range(args.val_start_idx, args.val_end_idx, args.val_interval)
+
     for i, model_path in enumerate(all_model_path) :
+        if not os.path.isfile(model_path) :
+            break
         model.load(model_path)
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
@@ -131,14 +127,12 @@ if __name__ == '__main__' :
 
     if(args.mode == 'train'):
         train_dataloader = DATALOADER(args, 'train', args.train_path)
-        #model.load(args.input_weight_path)
         train(args, model, log_manager, img_preprocessor, train_dataloader, None)
     elif(args.mode == 'val'):
         val_dataloader = DATALOADER(args, 'val', args.val_path)
-        #model.load(args.model_load_path)
         calc_map(args,model, log_manager, img_preprocessor, val_dataloader)
-    elif(args.mode == 'test'):
-        test(args, model, log_manager)
     elif(args.mode == 'val_models'):
         val_dataloader = DATALOADER(args, 'val', args.val_models_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
+    elif(args.mode == 'test'):
+        test(args, model, log_manager)

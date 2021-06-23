@@ -10,7 +10,7 @@ parser.add_argument('--mode', type=str, default='test', choices=['train', 'val',
 parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
-parser.add_argument('--model', type=str, default='frcnn')
+parser.add_argument('--model', type=str, default='mv_frcnn')
 parser.add_argument('--base_net', type=str, default='frcnn_vgg')
 
 
@@ -23,7 +23,10 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument("--dataset", default = 'INTERPARK18', help="Path to training data.")
 parser.add_argument("--train_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/train.json', help="Path to training data.")
 parser.add_argument("--val_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/val.json',  help="Path to val data.")
-parser.add_argument("--val_models_path", help="Path to val models.")
+parser.add_argument("--val_models_path", help="Path to val data.")
+parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
+parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
+parser.add_argument("--val_interval", default = 1, type=int, help="intervalof models to be validated")
 parser.add_argument("--test_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
 parser.add_argument("--parser_type", help="Parser to use. One of simple or pascal_voc", default="simple")
@@ -64,7 +67,11 @@ parser.add_argument('--img_scaling_factor', type=float, default=1.0,
 #network
 parser.add_argument("--network", help="Base network to use. Supports vgg or resnet50.", default='resnet50')
 
+#shared_layer
+parser.add_argument('--shared_layer_channels', type=int, default=512)
+
 #rpn
+parser.add_argument('--rpn_body_channels', type=int, default=512)
 parser.add_argument('--rpn_max_num_sample', type=int, default=256,
                     help='rpn maximum number of samples')
 parser.add_argument('--rpn_stride', type=int, default=16,

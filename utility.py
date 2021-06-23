@@ -127,6 +127,15 @@ class Model_path_manager:
     def get_path(self, name) : 
         return '%s_%s.%s' %(self.prefix, name, self.ext)
 
+    def get_path_in_range(self, start_idx, end_idx, interval = 1):
+        all_paths = []
+
+        for idx in range(start_idx, end_idx+1, interval):
+            path = self.get_path(str(idx))
+            all_paths.append(path)
+        return all_paths
+            
+
 class Data_to_monitor :
     def __init__(self, name, names) :
         self.name = name
@@ -200,7 +209,7 @@ class Log_manager:
                 self.num_calssifier_pos_samples_every_epoch.load(self.get_path('num_calssifier_pos_samples.npy'))
                 print('Continue from epoch {}...'.format(len(self.loss_every_epoch.get_data())))
 
-        if args.mode in ['val', 'val_models', 'train'] :
+        if args.mode in ['val', 'val_models'] :
             self.ap_names = args.class_list
             self.ap = Data_to_monitor('ap', self.ap_names[:-1])
             self.map = Data_to_monitor('map', ['map'])
@@ -220,15 +229,16 @@ class Log_manager:
         return os.path.join(self.dir, *subdir)
 
     def get_log_file(self):
-        open_type = 'a' if os.path.exists(self.get_path('log.txt'))else 'w'
-        log_file = open(self.get_path('log.txt'), open_type)
+        self.log_file_name = 'log_%s.txt' % (self.args.mode)
+        open_type = 'a' if os.path.exists(self.get_path(self.log_file_name))else 'w'
+        log_file = open(self.get_path(self.log_file_name), open_type)
         return log_file
-
 
     def write_config(self) :
         now = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
-        open_type = 'a' if os.path.exists(self.get_path('config.txt'))else 'w'
-        with open(self.get_path('config.txt'), open_type) as f:
+        self.config_file_name = 'config_%s.txt' % (self.args.mode)
+        open_type = 'a' if os.path.exists(self.get_path(self.config_file_name))else 'w'
+        with open(self.get_path(self.config_file_name), open_type) as f:
             f.write(now + '\n\n')
             for arg in vars(self.args):
                 f.write('{}: {}\n'.format(arg, getattr(self.args, arg)))
@@ -240,7 +250,7 @@ class Log_manager:
             self.loss_every_epoch.plot(self.get_path('loss.pdf'))
             self.num_calssifier_pos_samples_every_epoch.save(self.get_path('num_calssifier_pos_samples'))
             self.num_calssifier_pos_samples_every_epoch.plot(self.get_path('num_calssifier_pos_samples.pdf'))
-        if(self.args.mode in ['val', 'val_models', 'train']):
+        if(self.args.mode in ['val', 'val_models']):
             self.ap.save(self.get_path('ap'))
             self.map.save(self.get_path('map'))
             self.iou.save(self.get_path('iou'))
@@ -285,7 +295,7 @@ class Log_manager:
         self.log_file.write(log + '\n')
         if refresh:
             self.log_file.close()
-            self.log_file = open(self.get_path('log.txt'), 'a')
+            self.log_file = open(self.get_path(self.log_file_name), 'a')
 
     def write_cur_time(self):
         now = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
@@ -720,7 +730,7 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
     plt.show()
     '''
 
-def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold, num_cam, is_demo) : 
+def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
     #class_mapping = args.num2cls
@@ -730,8 +740,8 @@ def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold,
     # Calculate bboxes coordinates on resized image
     for ii in range(P_cls.shape[1]):
         # Ignore 'bg' class
-        #if np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1) : 
-        #    continue
+        if is_exclude_bg and np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1) : 
+            continue
 
         if np.max(P_cls[0, ii, :]) < bbox_threshold and is_demo :
             continue
@@ -818,5 +828,78 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
+def non_max_suppression_fast_multi_cam(boxes, probs, overlap_thresh=0.9, max_boxes=300):
+    # boxes : (num_cam, num_box, 4)
+    # probs : (num_box, )
+    # code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
+    # if there are no boxes, return an empty list
 
+    # Process explanation:
+    #   Step 1: Sort the probs list
+    #   Step 2: Find the larget prob 'Last' in the list and save it to the pick list
+    #   Step 3: Calculate the IoU with 'Last' box and other boxes in the list. If the IoU is larger than overlap_threshold, delete the box from list
+    #   Step 4: Repeat step 2 and step 3 until there is no item in the probs list 
+    if len(boxes) == 0:
+        return []
 
+    boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
+    # grab the coordinates of the bounding boxes
+    x1 = boxes[:, :, 0] #(num_box, num_cam)
+    y1 = boxes[:, :, 1]
+    x2 = boxes[:, :, 2]
+    y2 = boxes[:, :, 3]
+
+    np.testing.assert_array_less(x1, x2)
+    np.testing.assert_array_less(y1, y2)
+
+    # if the bounding boxes integers, convert them to floats --
+    # this is important since we'll be doing a bunch of divisions
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+
+    # initialize the list of picked indexes 
+    pick = []
+
+    # calculate the areas 
+    area = (x2 - x1) * (y2 - y1) #(num_box, num_cam)
+
+    # sort the bounding boxes 
+    idxs = np.argsort(probs) #(num_box,)
+
+    # keep looping while some indexes still remain in the indexes
+    # list
+    while len(idxs) > 0:
+        # grab the last index in the indexes list and add the
+        # index value to the list of picked indexes
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+        # find the intersection
+        xx1_int = np.maximum(x1[i], x1[idxs[:last]]) #x1[i]: (num_cam, ), x1[idxs[:last]]: (num_box, num_cam) #out: (num_box, num_cam)
+        yy1_int = np.maximum(y1[i], y1[idxs[:last]])
+        xx2_int = np.minimum(x2[i], x2[idxs[:last]])
+        yy2_int = np.minimum(y2[i], y2[idxs[:last]])
+
+        ww_int = np.maximum(0, xx2_int - xx1_int) #(num_box, num_cam)
+        hh_int = np.maximum(0, yy2_int - yy1_int)
+
+        area_int = ww_int * hh_int #(num_box, num_cam)
+
+        # find the union
+        area_union = area[i] + area[idxs[:last]] - area_int
+
+        # compute the ratio of overlap
+        overlap = area_int/(area_union + 1e-6) #(num_box, num_cam)
+
+        # delete all indexes from the index list that have
+        idxs = np.delete(idxs, np.concatenate(([last],
+            #np.where(np.all(overlap > overlap_thresh, 1))[0])))
+            np.where(np.any(overlap > overlap_thresh, 1))[0])))
+
+        if len(pick) >= max_boxes:
+            break
+
+    # return only the bounding boxes that were picked using the integer data type
+    boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
+    probs = probs[pick]
+    return boxes, probs

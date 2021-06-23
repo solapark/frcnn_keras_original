@@ -9,6 +9,8 @@ from gt.calc_regr import CALC_REGR
 
 class CLASSIFIER_GT_CALCULATOR:
     def __init__(self, args):
+        self.args = args
+        self.ideal_num_pos = args.num_rois // 2
         self.num_cam = args.num_cam
         self.classifier_std_scaling = args.classifier_std_scaling
         self.num_cls = args.num_cls
@@ -25,13 +27,15 @@ class CLASSIFIER_GT_CALCULATOR:
         self.regr_size = self.num_cam*self.num_cls*8
  
     def get_batch(self, *args):
-        X_box_batch, Y_cls_batch, Y_regr_batch = [], [], []
+        X_box_batch, Y_cls_batch, Y_regr_batch, num_neg_batch, num_pos_batch = [], [], [], [], []
         for args_one_batch in zip(*args) :
-            X_box, Y_cls, Y_regr = self.calc_classifier_gt(*args_one_batch)
+            X_box, Y_cls, Y_regr, num_neg, num_pos = self.calc_classifier_gt(*args_one_batch)
             X_box_batch.append(X_box)
             Y_cls_batch.append(Y_cls)
             Y_regr_batch.append(Y_regr)
-        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch) 
+            num_neg_batch.append(num_neg)
+            num_pos_batch.append(num_pos)
+        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(num_neg_batch), np.array(num_pos_batch) 
        
     def get_gt_insts_box_cls(self, gt_insts):
         num_inst = len(gt_insts)
@@ -136,7 +140,28 @@ class CLASSIFIER_GT_CALCULATOR:
         X_box[:, :, 2] -= X_box[:, :, 0]
         X_box[:, :, 3] -= X_box[:, :, 1]
 
-        return X_box, Y_cls, Y_regr
+        random_X_box, random_Y_cls, random_Y_regr = self.get_random_samples(X_box, Y_cls, Y_regr, num_neg, num_pos)
+
+        return random_X_box, random_Y_cls, random_Y_regr, num_neg, num_pos
+
+    def get_random_samples(self, X2, Y1, Y2, num_neg, num_pos):
+        neg_samples = np.arange(0, num_neg)
+        pos_samples = np.arange(num_neg, num_neg+num_pos)
+
+        if num_pos > self.ideal_num_pos : 
+            pos_samples= np.random.choice(pos_samples, self.ideal_num_pos, replace=False)
+            num_pos = len(pos_samples)
+
+        num_rest = self.args.num_rois - num_pos
+        if num_neg > num_rest :
+            neg_samples = np.random.choice(neg_samples, num_rest, replace=False)
+        elif num_neg :
+            neg_samples = np.random.choice(neg_samples, num_rest, replace=True)
+        
+        sel_samples = pos_samples.tolist() + neg_samples.tolist()
+
+        return X2[sel_samples], Y1[sel_samples], Y2[sel_samples]
+
 
 if __name__ == '__main__' :
     random.seed(1)

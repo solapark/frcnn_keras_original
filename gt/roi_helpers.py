@@ -290,42 +290,24 @@ def rpn_to_roi(rpn_layer, regr_layer, args, dim_ordering, use_regr=True, max_box
 
 	return result
 
-def get_classifier_samples(X2, Y1, Y2, num_rois):
-        neg_samples = np.where(Y1[0, :, -1] == 1)
-        pos_samples = np.where(Y1[0, :, -1] == 0)
+'''
+def get_classifier_samples(X2, Y1, Y2, num_rois, num_neg, num_pos):
+        neg_samples = np.arange(0, num_neg))
+        pos_samples = np.arange(num_neg, num_neg+num_pos)
 
-        if len(neg_samples) > 0:
-            neg_samples = neg_samples[0]
-        else:
-            neg_samples = []
+        if num_pos > num_rois//2 : 
+            pos_samples= np.random.choice(pos_samples, num_rois//2, replace=False)
+            num_pos = len(pos_samples)
 
-        if len(pos_samples) > 0:
-            pos_samples = pos_samples[0]
-        else:
-            pos_samples = []
+        num_rest = num_rois - num_pos
+        if num_neg > num_rest :
+            neg_samples = np.random.choice(neg_samples, num_rest, replace=False)
+        elif num_neg > 0 :
+            neg_samples = np.random.choice(neg_samples, num_rest, replace=True)
         
-        num_pos_samples = len(pos_samples)
+        sel_samples = pos_samples.tolist() + neg_samples.tolist()
 
-        if num_rois > 1:
-            if len(pos_samples) < num_rois//2:
-                selected_pos_samples = pos_samples.tolist()
-            else:
-                selected_pos_samples = np.random.choice(pos_samples, num_rois//2, replace=False).tolist()
-            try:
-                selected_neg_samples = np.random.choice(neg_samples, num_rois - len(selected_pos_samples), replace=False).tolist()
-            except:
-                selected_neg_samples = np.random.choice(neg_samples, num_rois - len(selected_pos_samples), replace=True).tolist()
-
-            sel_samples = selected_pos_samples + selected_neg_samples
-        else:
-            # in the extreme case where num_rois = 1, we pick a random pos or neg sample
-            selected_pos_samples = pos_samples.tolist()
-            selected_neg_samples = neg_samples.tolist()
-            if np.random.randint(0, 2):
-                sel_samples = random.choice(neg_samples)
-            else:
-                sel_samples = random.choice(pos_samples)
-
-        return X2[:, sel_samples, :], Y1[:, sel_samples, :], Y2[:, sel_samples, :], num_pos_samples
+        return X2[:, sel_samples, :], Y1[:, sel_samples, :], Y2[:, sel_samples, :]
+'''
 
 
