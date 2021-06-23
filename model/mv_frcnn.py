@@ -298,10 +298,10 @@ class MV_FRCNN:
         reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch)
 
         X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
+        print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
         num_pos_samples = num_pos_samples[0]
 
-        if len(X2):
-            #X2, Y1, Y2 = roi_helpers.get_classifier_samples(X2, Y1, Y2, self.args.num_rois, num_neg_samples, num_pos_samples)
+        if X2.shape[1] == self.args.num_rois:
             X2_list = list(X2.transpose(2, 0, 1, 3))
             loss_class = self.model_classifier.train_on_batch(X_list+X2_list, [Y1, Y2])
 
