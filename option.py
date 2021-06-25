@@ -20,9 +20,9 @@ parser.add_argument('--num_nms', type=int, default=300)
 parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
-parser.add_argument("--dataset", default = 'INTERPARK18', help="Path to training data.")
-parser.add_argument("--train_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/train.json', help="Path to training data.")
-parser.add_argument("--val_path", default = '/data3/sap/frcnn_keras_original/data/INTERPARK18/val.json',  help="Path to val data.")
+parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'])
+parser.add_argument("--train_path", help="Path to training data.")
+parser.add_argument("--val_path",  help="Path to val data.")
 parser.add_argument("--val_models_path", help="Path to val data.")
 parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
 parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
@@ -30,6 +30,9 @@ parser.add_argument("--val_interval", default = 1, type=int, help="intervalof mo
 parser.add_argument("--test_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
 parser.add_argument("--parser_type", help="Parser to use. One of simple or pascal_voc", default="simple")
+
+#messytable
+parser.add_argument("--messytable_img_dir", default="/data1/sap/MessyTable/images")
 
 #augment
 parser.add_argument("-hf", '--use_horizontal_flips', help="Augment with horizontal flips in training. (Default=false).", action="store_true", default=False)
@@ -84,6 +87,7 @@ parser.add_argument('--rpn_min_overlap', type=float, default=.3,
                     help='threshold for negative sample')
 
 #ven
+parser.add_argument('--num_max_ven_samples', type=int, default=16, help='size of reid embedding')
 parser.add_argument('--view_invar_feature_size', type=int, default=128, help='size of reid embedding')
 parser.add_argument('--reid_min_emb_dist', type=float, default=.4, help='minimum embedding distance to match two pred boxes')
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')

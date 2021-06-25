@@ -8,6 +8,7 @@ from data.label_dataloader import LABEL_DATALOADER
 class DATALOADER :
     #def __init__(self, json_path, dataset_name, im_size, mode, batch_size, shuffle):
     def __init__(self, args, mode, path):
+        self.args = args
         self.batch_size = args.batch_size
         self.num_cam = args.num_cam
         self.num_cls = args.num_cls
@@ -46,7 +47,14 @@ class DATALOADER :
         for scene_content in list(json['scenes'].values()) :
             path_dict = dict()
             for cam_num, camera_content in list(scene_content['cameras'].items()) :
-                path_dict[int(cam_num)] = camera_content['pathname']
+                cam_num = int(cam_num)
+                if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
+
+                if cam_num >= self.args.num_valid_cam : continue
+                path = camera_content['pathname']
+                if self.args.dataset == 'MESSYTABLE' :
+                    path = os.path.join(self.args.messytable_img_dir, path)
+                path_dict[cam_num] = path
             img_path_list.append(path_dict)
         return img_path_list
 
@@ -57,15 +65,19 @@ class DATALOADER :
         for scene_content in list(json['scenes'].values()):
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
+                if self.args.dataset == 'MESSYTABLE' : cls -= 1
                 resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
+                    cam_num = int(cam_num)
+                    if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
+                    if cam_num >= self.args.num_valid_cam : continue
                     if instance_num in camera_content['instances'] :
                         x1, y1, x2, y2 = camera_content['instances'][instance_num]['pos']
                         x1 *= zoom_in_w                
                         x2 *= zoom_in_w                
                         y1 *= zoom_in_h                
                         y2 *= zoom_in_h                
-                        resized_instance_dict[instance_num]['resized_box'][int(cam_num)] = list(map(float, [x1, y1, x2, y2]))
+                        resized_instance_dict[instance_num]['resized_box'][cam_num] = list(map(float, [x1, y1, x2, y2]))
 
             resized_instance_list.append(list(resized_instance_dict.values()))
         self.zoom_in_w = zoom_in_w

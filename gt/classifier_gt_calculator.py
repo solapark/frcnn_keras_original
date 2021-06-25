@@ -72,6 +72,8 @@ class CLASSIFIER_GT_CALCULATOR:
             is_neg = 0
             for gt_idx, (gt_boxes, is_gt_valid) in enumerate(zip(all_gt_boxes, is_gt_box_valid)):
                 common_cam_idx = np.where((is_gt_valid == is_pred_valid) & (is_pred_valid == 1))
+                if common_cam_idx[0].size == 0: 
+                    continue
                 valid_pred_boxes = pred_boxes[common_cam_idx]
                 valid_gt_box = gt_boxes[common_cam_idx]
                 cur_iou_list = np.array([iou(gt_box, pred_box) for gt_box, pred_box in zip(valid_gt_box, valid_pred_boxes)])

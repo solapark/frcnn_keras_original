@@ -69,7 +69,8 @@ def view_invariant_loss(alpha=.3):
         negative_dist = tf.sqrt(tf.reduce_sum(tf.square(anchor - negative), -1)) #(numSample, )
 
         loss_1 = positive_dist - negative_dist + alpha
-        loss = tf.reduce_sum(tf.maximum(loss_1, 0.0)) #()
+        #loss = tf.reduce_sum(tf.maximum(loss_1, 0.0)) #()
+        loss = tf.reduce_mean(tf.maximum(loss_1, 0.0)) #()
 
         return loss
     return triplet_loss_func

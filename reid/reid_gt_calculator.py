@@ -8,6 +8,7 @@ from itertools import permutations
 
 class REID_GT_CALCULATOR:
     def __init__(self, args):
+        self.args = args
         self.reid_gt_min_overlap = args.reid_gt_min_overlap
         self.rpn_stride = args.rpn_stride
  
@@ -59,6 +60,13 @@ class REID_GT_CALCULATOR:
             
         ref_pos = ref_pos.transpose((1, 0, 2))
         if(ref_pos.size == 0) : return np.zeros((3, 0, 4))
+
+        num_samples = ref_pos.shape[1]
+        if num_samples > self.args.num_max_ven_samples : 
+            all_idx = np.arange(num_samples)
+            sel_idx = np.random.choice(all_idx, self.args.num_max_ven_samples, replace=False)
+            ref_pos = ref_pos[:, sel_idx]
+
         ref, pos = ref_pos
         ref_CHWA_idx = tuple(ref.T)
         pos_CHWA_idx = tuple(pos.T)
@@ -72,6 +80,7 @@ class REID_GT_CALCULATOR:
         neg_idx = get_min_emb_dist_idx(ref_emb, neg_cand_emb, pos_dist)
         neg_CHWA_idx = pred_box_idx[neg_cam_idx, neg_idx] #(N, 4)
         ref_pos_neg = np.concatenate([ref_pos, np.expand_dims(neg_CHWA_idx, 0)], 0)#(3, N, 4)
+
         return ref_pos_neg
 
     def draw_box_from_idx(self, all_boxes, all_images, idx, rpn_stride, name):

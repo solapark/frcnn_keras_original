@@ -257,7 +257,7 @@ class MV_FRCNN:
 
         rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
         loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
-        #self.rpn_gt_calculator.draw_rpn_gt(X, rpn_gt_batch)
+        #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
 
         loss[0:2] = loss_rpn[1:3]
         loss[0:2] /= self.args.num_valid_cam
@@ -299,6 +299,7 @@ class MV_FRCNN:
 
         X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
         print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
+        print('X2', X2.shape, 'Y1', Y1.shape, 'Y2', Y2.shape)
         num_pos_samples = num_pos_samples[0]
 
         if X2.shape[1] == self.args.num_rois:
