@@ -5,8 +5,7 @@ from keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D, TimeDistrib
 
 from keras import backend as K
 
-from keras_frcnn.RoiPoolingConv import RoiPoolingConv
-from keras_frcnn.FixedBatchNormalization import FixedBatchNormalization
+from model.roi_pooling import RoiPoolingConv
 
 def get_weight_path():
     return 'resnet50_weights_tf_dim_ordering_tf_kernels.h5'

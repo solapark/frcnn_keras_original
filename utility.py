@@ -704,6 +704,8 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
                 if(x1 == -args.rpn_stride) :
                     continue 
                 # Calculate real coordinates on original image
+
+                ratio = img_min_side/height
                 (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
 
                 color = (int(instance_to_color[jk][0]), int(instance_to_color[jk][1]), int(instance_to_color[jk][2])) 
@@ -730,13 +732,14 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
     plt.show()
     '''
 
-def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
+def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
     #class_mapping = args.num2cls
     class_mapping = args.class_list
     bboxes = {}
     probs = {}
+    is_valids = {}
     # Calculate bboxes coordinates on resized image
     for ii in range(P_cls.shape[1]):
         # Ignore 'bg' class
@@ -750,6 +753,7 @@ def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold,
 
         if cls_name not in bboxes:
             bboxes[cls_name] = [[] for _ in range(num_cam)]
+            is_valids[cls_name] = [[] for _ in range(num_cam)]
             probs[cls_name] = []
 
         cls_num = np.argmax(P_cls[0, ii, :])
@@ -769,8 +773,9 @@ def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, args, bbox_threshold,
             except:
                 pass
             bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
+            is_valids[cls_name][cam_idx].append(is_valids_all_cam[0, ii, cam_idx])
         probs[cls_name].append(np.max(P_cls[0, ii, :]))
-    return bboxes, probs 
+    return bboxes, probs, is_valids 
 
 def get_real_coordinates(ratio, x1, y1, x2, y2):
 
@@ -828,9 +833,10 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
-def non_max_suppression_fast_multi_cam(boxes, probs, overlap_thresh=0.9, max_boxes=300):
+def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0.9, max_boxes=300):
     # boxes : (num_cam, num_box, 4)
     # probs : (num_box, )
+    # is_valids : (num_cam, num_box)
     # code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
     # if there are no boxes, return an empty list
 
@@ -843,6 +849,7 @@ def non_max_suppression_fast_multi_cam(boxes, probs, overlap_thresh=0.9, max_box
         return []
 
     boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
+    is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
     # grab the coordinates of the bounding boxes
     x1 = boxes[:, :, 0] #(num_box, num_cam)
     y1 = boxes[:, :, 1]
@@ -894,12 +901,60 @@ def non_max_suppression_fast_multi_cam(boxes, probs, overlap_thresh=0.9, max_box
         # delete all indexes from the index list that have
         idxs = np.delete(idxs, np.concatenate(([last],
             #np.where(np.all(overlap > overlap_thresh, 1))[0])))
-            np.where(np.any(overlap > overlap_thresh, 1))[0])))
+            #np.where(np.any(overlap > overlap_thresh, 1))[0])))
+            np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
 
         if len(pick) >= max_boxes:
             break
 
     # return only the bounding boxes that were picked using the integer data type
     boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
+    is_valids = is_valids[pick].transpose(1, 0)
     probs = probs[pick]
-    return boxes, probs
+    return boxes, probs, is_valids
+
+def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
+    cv2.rectangle(img,(x1, y1), (x2, y2), color, 4)
+    textLabel = '{}:{}'.format(cls,int(100*prob)) if prob else cls
+    textLabel = '{}_{}'.format(inst_num,textLabel) if inst_num else textLabel
+    (text_w,text_h) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_DUPLEX,1,1)
+    textOrg = (x1-10, y1-text_h)
+    cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+
+    return img
+ 
+class Result_saver :
+    def __init__(self, args):
+        self.args = args
+        self.dataset = args.dataset
+        self.resize_ratio = args.im_size/args.height
+
+        self.result_img_save_dir = os.path.join(args.base_path, 'experiment', args.save_dir, 'test_result')
+        os.path.join(self.args.base_path, self.result_img_save_dir)
+        os.makedirs(self.result_img_save_dir, exist_ok=True) 
+        self.colors = np.random.randint(0, 255, (args.num_nms, 3)).tolist()
+
+    def save(self, X, Y, img_paths, all_dets):
+        save_path = self.get_general_file_name(img_paths)
+        img_list = [x[0] for x in X]
+        for cam_idx in range(self.args.num_valid_cam): 
+            dets = all_dets[cam_idx]
+            for det in dets:
+                x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
+                det_color = self.colors[inst_idx]
+                img_list[cam_idx] = draw_inst(img_list[cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
+        conc_img = get_concat_img(img_list)
+        cv2.imwrite(save_path, conc_img)
+ 
+    def get_general_file_name(self, img_paths):
+        base_name = os.path.basename(img_paths[0])
+        if(self.args.dataset == 'MESSYTABLE'):
+            general_name = get_value_in_pattern(base_name, '(.*)-0[0-9].jpg')
+        general_path = os.path.join(self.result_img_save_dir, general_name+'.jpg')
+        return general_path
+
+def get_value_in_pattern(text, pattern):
+    #pattern = 'aaa_(.*)'
+    #text = 'aaa_b'
+    #return = ['b']
+    return re.findall(pattern, text)[0]

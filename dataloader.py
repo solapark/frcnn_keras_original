@@ -28,9 +28,9 @@ class DATALOADER :
         dataset_path = path 
 
         data = self.get_data_from_json(dataset_path)
-        img_path_list = self.get_img_path_list(data) #X
+        self.img_path_list = self.get_img_path_list(data) #X
 
-        self.image_dataloader = IMAGE_DATALOADER(img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_cam)
+        self.image_dataloader = IMAGE_DATALOADER(self.img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_cam)
 
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
@@ -90,8 +90,10 @@ class DATALOADER :
     def __getitem__(self, idx):
         if self.mode == 'demo':
             return self.image_dataloader[idx]
-        elif self.mode == 'train' or self.mode == 'test' or self.mode == 'val':
+        elif self.mode == 'train' or self.mode == 'val':
             return self.image_dataloader[idx], self.label_dataloader[idx]
+        elif self.mode == 'test' :
+            return self.image_dataloader[idx], self.label_dataloader[idx], self.img_path_list[idx]
 
     def on_epoch_end(self):
         if(self.shuffle) : 

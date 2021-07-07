@@ -69,8 +69,8 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     timer_test = utility.timer()
     progbar = generic_utils.Progbar(len(dataloader))
-    #for idx in range(len(dataloader)):
-    for idx in range(0, len(dataloader), 4):
+    for idx in range(len(dataloader)):
+    #for idx in range(0, len(dataloader), 4):
         X_raw, Y = dataloader[idx]
         X = img_preprocessor.process_batch(X_raw)
         all_dets = model.predict_batch(X)
@@ -114,13 +114,27 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
 
     for i, model_path in enumerate(all_model_path) :
         if not os.path.isfile(model_path) :
+            log_manager.write_log('{} doesn\'t exist\n'.format(model_path)) 
             break
         model.load(model_path)
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
 
+def test(args, model, log_manager, img_preprocessor, dataloader):
+    progbar = generic_utils.Progbar(len(dataloader))
+    result_saver = utility.Result_saver(args)
+    for idx in range(len(dataloader)):
+        X_raw, Y, img_paths = dataloader[idx]
+        X = img_preprocessor.process_batch(X_raw)
+        #all_dets = []
+        #result_saver.save(X_raw, Y, img_paths, all_dets)
+        all_dets = model.predict_batch(X)
+        result_saver.save(X_raw, Y, img_paths, all_dets)
+        progbar.update(idx+1)
+
 if __name__ == '__main__' :
     model = Model(args)
+    #model = None
     utility.file_system(args)
     log_manager = utility.Log_manager(args)
     img_preprocessor = utility.Img_preprocessor(args)
@@ -135,4 +149,5 @@ if __name__ == '__main__' :
         val_dataloader = DATALOADER(args, 'val', args.val_models_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'test'):
-        test(args, model, log_manager)
+        test_dataloader = DATALOADER(args, 'test', args.test_path)
+        test(args, model, log_manager, img_preprocessor, test_dataloader)

@@ -200,12 +200,14 @@ class MV_FRCNN:
 
         # apply the spatial pyramid pooling to the proposed regions
         bboxes = {cls_name : [ [] for _ in range(self.args.num_valid_cam) ] for cls_name in self.args.class_mapping_without_bg.keys()}
+        is_valids = {cls_name : [ [] for _ in range(self.args.num_valid_cam) ] for cls_name in self.args.class_mapping_without_bg.keys()}
         probs = {cls_name : [] for cls_name in self.args.class_mapping_without_bg.keys()}
 
         num_reid_intsts = reid_box_pred_batch.shape[1]
         for jk in range(num_reid_intsts // self.args.num_rois + 1):
             ROIs_list = []
             ROIs_all_cam = reid_box_pred_batch[:, self.args.num_rois * jk:self.args.num_rois * (jk + 1)]
+            is_valids_all_cam = is_valid_batch[:, self.args.num_rois * jk:self.args.num_rois * (jk + 1)]
 
             if ROIs_all_cam.shape[1] == 0:
                 break
@@ -226,27 +228,34 @@ class MV_FRCNN:
 
             [P_cls, P_regr] = self.model_classifier.predict(F_list+ROIs_list)
 
-            cur_bboxes, cur_probs = utility.classfier_output_to_box_prob(np.array(ROIs_list), P_cls, P_regr, self.args, 0, self.args.num_valid_cam, False, is_exclude_bg=True)
+            cur_bboxes, cur_probs, cur_is_valids = utility.classfier_output_to_box_prob(np.array(ROIs_list), P_cls, P_regr, is_valids_all_cam, self.args, 0, self.args.num_valid_cam, False, is_exclude_bg=True)
 
             for cls_name in cur_bboxes.keys():
                 for cam_idx in range(self.args.num_valid_cam):
                     bboxes[cls_name][cam_idx].extend(cur_bboxes[cls_name][cam_idx])
+                    is_valids[cls_name][cam_idx].extend(cur_is_valids[cls_name][cam_idx])
+                    
                 probs[cls_name].extend(cur_probs[cls_name])
 
         all_dets = [[] for _ in range(self.args.num_valid_cam)]
+        inst_idx = 1
         for key in bboxes:
             cur_bboxes = np.array(bboxes[key])
             if not cur_bboxes.size : continue
             cur_probs = np.array(probs[key])
-            new_boxes_all_cam, new_probs = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, overlap_thresh=0.5)
-            for cam_idx in range(self.args.num_valid_cam) : 
-                new_boxes = new_boxes_all_cam[cam_idx] #(num_box, 4)
-                for jk in range(new_boxes.shape[0]):
-                    (x1, y1, x2, y2) = new_boxes[jk,:]
-                    if(x1 == -self.args.rpn_stride) :
-                        continue 
-                    det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk]}
+            cur_is_valids = np.array(is_valids[key])
+            new_boxes_all_cam, new_probs, new_is_valids_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, overlap_thresh=0.5)
+            for jk in range(new_boxes_all_cam.shape[1]):
+                for cam_idx in range(self.args.num_valid_cam) : 
+                    (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
+                    is_valid = new_is_valids_all_cam[cam_idx, jk]
+                    if not is_valid : 
+                        continue
+                    #if(x1 == -self.args.rpn_stride) :
+                    #    continue 
+                    det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk], 'inst_idx': inst_idx}
                     all_dets[cam_idx].append(det)
+                inst_idx += 1
         return all_dets
 
     def train_batch(self, X, Y, debug_img):
@@ -304,7 +313,11 @@ class MV_FRCNN:
 
         if X2.shape[1] == self.args.num_rois:
             X2_list = list(X2.transpose(2, 0, 1, 3))
-            loss_class = self.model_classifier.train_on_batch(X_list+X2_list, [Y1, Y2])
+            try : 
+                loss_class = self.model_classifier.train_on_batch(X_list+X2_list, [Y1, Y2])
+            except Exception as e:
+                print(e)
+                return loss, num_pos_samples
 
             loss[3:5] = loss_class[1:3]
             loss[-1] = loss[:-1].sum()
