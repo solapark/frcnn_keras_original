@@ -87,14 +87,12 @@ class Log_manager_sv:
 
 class Model_path_manager:
     def __init__(self, args):
+        self.args = args
         self.model_dir = os.path.join(args.base_path, 'experiment', args.save_dir, 'model')
         base_name = 'model.hdf5'
         self.name_pattern = "model_([0-9]*)\.hdf5"
         name_prefix, self.ext = base_name.split('.')
 
-        if(self.ext != 'hdf5'):
-            print('Output weights must have .hdf5 filetype')
-            exit(1)
         self.prefix = os.path.join(self.model_dir, name_prefix)
         
         if args.resume :
@@ -104,15 +102,8 @@ class Model_path_manager:
             self.cur_epoch = 1
         
     def get_resume_epoch(self) :
-        filenames = os.listdir(self.model_dir)
-        epoch_list = []
-        for filename in filenames :
-            model_path_regex = re.match(self.name_pattern, filename)
-            epoch_list.append(int(model_path_regex.group(1)))
-        return max(epoch_list)
-
-    def get_resume_path(self):
-        return '%s_%04d.%s' %(self.prefix, self.resume_epoch, self.ext)
+        model_path_regex = get_value_in_pattern(self.args.input_weight_path, self.name_pattern)
+        return int(model_path_regex)
 
     def get_save_path(self):
         save_path = '%s_%04d.%s' %(self.prefix, self.cur_epoch, self.ext)

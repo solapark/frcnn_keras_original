@@ -18,8 +18,9 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
     log_manager.write_log('Num train samples : len(train_dataloader) * num_valid_cam ='+str(len(train_dataloader))+'*'+str(args.num_valid_cam))
 
     timer_data, timer_model = utility.timer(), utility.timer()
-    for epoch_num in range(args.num_epochs):
-        log_manager.write_log('[Epoch %d/%d]'%(epoch_num+1, args.num_epochs))
+    start_epoch = model_path_manager.get_resume_epoch() + 1 if args.resume else 1
+    for epoch_num in range(start_epoch, args.num_epochs+1):
+        log_manager.write_log('[Epoch %d/%d]'%(epoch_num, args.num_epochs))
 
         for idx in range(len(train_dataloader)):
         #for idx in range(10):
@@ -53,7 +54,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
             timer_data.tic()
         log_manager.epoch_done()
     
-        model.save(model_path_manager.get_path('%d'%(epoch_num+1)))
+        model.save(model_path_manager.get_path('%d'%(epoch_num)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     map_calculator = utility.Map_calculator(args)
