@@ -2,7 +2,6 @@ from option import args
 from model import Model
 import utility
 from dataloader import DATALOADER
-from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
 
 from keras.utils import generic_utils
 
@@ -13,8 +12,6 @@ import math
 
 def train(args, model, log_manager, img_preprocessor, train_dataloader, val_dataloader) :
     model_path_manager = utility.Model_path_manager(args)
-    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
-    rpn_gt_calculator = RPN_GT_CALCULATOR(args)
 
     log_manager.write_cur_time()
     log_manager.write_log('Training...')
@@ -56,12 +53,6 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
             timer_data.tic()
         log_manager.epoch_done()
     
-        '''
-        cur_mAP = calc_map(args, model, log_manager, img_preprocessor, val_dataloader)
-        if(cur_mAP > best_mAP):
-            best_mAP = cur_mAP
-            model.save(model_path_manager.get_path('best'))
-        '''
         model.save(model_path_manager.get_path('%d'%(epoch_num+1)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
