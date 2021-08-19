@@ -723,7 +723,7 @@ def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) :
     plt.show()
     '''
 
-def classfier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
+def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
     #class_mapping = args.num2cls
@@ -781,23 +781,36 @@ def draw_nms(nms_list, debug_img, rpn_stride) :
     nms_np = np.stack(nms_list, 0) #(num_cam, 300, 4)
     nms_np = nms_np.astype(int)*rpn_stride
     for cam_idx, nms in enumerate(nms_np) :
-        img = np.copy(debug_img[cam_idx])
+        img = np.copy(debug_img[cam_idx]).squeeze()
         window_name = 'nms' + str(cam_idx)
         for box in nms:
-            draw_box(img, box, window_name)
+            img = draw_box(img, box, window_name, is_show=False)
+        img = cv2.resize(img, (320, 180))
+        cv2.imshow(window_name, img)
     cv2.waitKey()
  
-def draw_box(image, box, name, color = (0, 255, 0)):
+def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None):
+    image = np.copy(image).squeeze()
     x1, y1, x2, y2 = box
     cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-    image = cv2.resize(image, (320, 180))
-    cv2.imshow(name, image)
+    if text:
+        cv2.putText(image, text, (x1+10, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2)
+        
+    if is_show :
+        image = cv2.resize(image, (320, 180))
+        cv2.imshow(name, image)
+    return image
+
+def draw_line(img, pt1, pt2, color = (0, 255, 0)):
+    img = np.copy(img)
+    img = cv2.line(img, pt1, pt2, color, 5)
+    return img
 
 def calc_emb_dist(embs1, embs2) : 
     '''
     calc emb dist for last axis
     Args :
-        embs1 and embs2 have same shape (ex : (2, 3, 4))
+        embs1 and embs2 have same dims  (ex : (2, 1, 4) and (2, 3, 4))
     Return :
         dist for last axis (ex : (2, 3))
     '''
@@ -812,15 +825,16 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
     Return :
         min_dist_idx (shape : m, 1)
     '''
-    emb_ref = emb[:, np.newaxis, :]
+    #emb_ref = emb[:, np.newaxis, :]
+    emb_ref = np.expand_dims(emb, -2)
     dist = calc_emb_dist(emb_ref, embs) #(m, k)
 
     if(thresh.size) : 
         thresh = thresh[:, np.newaxis] #(m, 1)
         dist[dist<=thresh] = np.inf 
-    min_dist_idx = np.argmin(dist, 1) #(m, )
+    min_dist_idx = np.argmin(dist, -1) #(m, )
     if(is_want_dist):
-        min_dist = dist[np.arange(len(dist)), min_dist_idx]
+        min_dist = dist[np.arange(len(dist)), min_dist_idx] if dist.ndim > 1 else dist[min_dist_idx]
         return min_dist_idx, min_dist
     return min_dist_idx
 
@@ -903,6 +917,23 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0
     is_valids = is_valids[pick].transpose(1, 0)
     probs = probs[pick]
     return boxes, probs, is_valids
+
+def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride) : 
+    boxes_list = boxes_batch[0].astype(int)*rpn_stride  #(300, num_cam, 4)
+    is_valids_list = is_valid_batch[0] #(300, num_cam)
+
+    boxes_list = boxes_list[::-1]
+    is_valids_list = is_valids_list[::-1]
+    for boxes, is_valids in zip(boxes_list, is_valids_list) :
+        img_list = []
+        for cam_idx, (box, is_valid)  in enumerate(zip(boxes, is_valids)):
+            color = (0, 0, 255) if is_valid  else (0, 0, 0) 
+            window_name = 'reid' + str(cam_idx)
+            img = draw_box(np.copy(debug_img[cam_idx]), box, window_name, color, is_show=False, text=str(int(is_valid)))
+            img_list.append(cv2.resize(img, (480, 240)))
+        conc_img = get_concat_img(img_list)
+        cv2.imshow('reid_result', conc_img)
+        cv2.waitKey(0)
 
 def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
     cv2.rectangle(img,(x1, y1), (x2, y2), color, 4)

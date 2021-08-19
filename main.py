@@ -25,13 +25,17 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         for idx in range(len(train_dataloader)):
         #for idx in range(10):
             timer_data.tic()
-            X_raw, Y = train_dataloader[idx]
+            extirns = None
+            if args.is_use_epipolar :
+                X_raw, Y, extrins = train_dataloader[idx]
+            else : 
+                X_raw, Y = train_dataloader[idx]
             X = img_preprocessor.process_batch(X_raw)
             timer_data.hold()
 
             timer_model.tic()
 
-            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw)
+            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw, extrins)
 
             timer_model.hold()
 
@@ -63,9 +67,15 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     for idx in range(len(dataloader)):
     #for idx in range(0, len(dataloader), 4):
-        X_raw, Y = dataloader[idx]
+        extirns = None
+        if args.is_use_epipolar :
+            X_raw, Y, extrins = dataloader[idx]
+        else : 
+            X_raw, Y = dataloader[idx]
         X = img_preprocessor.process_batch(X_raw)
-        all_dets = model.predict_batch(X)
+
+        all_dets = model.predict_batch(X, extrins)
+
 
         gt_batch = sv_gt_batch_generator.get_gt_batch(Y)
 
@@ -108,19 +118,25 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
         if not os.path.isfile(model_path) :
             log_manager.write_log('{} doesn\'t exist\n'.format(model_path)) 
             break
-        model.load(model_path)
+        #model.load(model_path)
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
 
 def test(args, model, log_manager, img_preprocessor, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     result_saver = utility.Result_saver(args)
+    #model.load(args.input_weight_path)
     for idx in range(len(dataloader)):
-        X_raw, Y, img_paths = dataloader[idx]
+        extrins = None
+        if args.is_use_epipolar :
+            X_raw, Y, img_paths, extrins = dataloader[idx]
+        else : 
+            X_raw, Y, img_paths = dataloader[idx]
+
         X = img_preprocessor.process_batch(X_raw)
         #all_dets = []
         #result_saver.save(X_raw, Y, img_paths, all_dets)
-        all_dets = model.predict_batch(X)
+        all_dets = model.predict_batch(X, extrins, X_raw)
         result_saver.save(X_raw, Y, img_paths, all_dets)
         progbar.update(idx+1)
 
@@ -138,7 +154,7 @@ if __name__ == '__main__' :
         val_dataloader = DATALOADER(args, 'val', args.val_path)
         calc_map(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'val_models'):
-        val_dataloader = DATALOADER(args, 'val', args.val_models_path)
+        val_dataloader = DATALOADER(args, 'val', args.val_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'test'):
         test_dataloader = DATALOADER(args, 'test', args.test_path)

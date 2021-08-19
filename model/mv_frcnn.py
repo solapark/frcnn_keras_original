@@ -31,13 +31,18 @@ class MV_FRCNN:
         self.model_rpn, self.model_ven, self.model_classifier, self.model_all = self.make_model(args, base_net)
         self.compile()
 
+        if self.args.freeze_rpn :
+            for layer in self.model_rpn.layers:
+                layer.trainable = False
+
         self.reid = REID(args)
 
         if(self.mode == 'train') :
             self.rpn_gt_calculator = RPN_GT_CALCULATOR(args)
             self.reid_gt_calculator = REID_GT_CALCULATOR(args)
             self.classifier_gt_calculator = CLASSIFIER_GT_CALCULATOR(args)
-        
+
+       
     def save(self, path):
         self.model_all.save_weights(path)
 
@@ -161,7 +166,9 @@ class MV_FRCNN:
 
         return model_rpn, model_ven, model_classifier
 
-    def predict_batch(self, X):
+    def predict_batch(self, X, extrins=None, debug_images=None):
+        """
+
         X_list = list(X)
 
         P_rpn = self.model_rpn.predict_on_batch(X_list)
@@ -191,8 +198,19 @@ class MV_FRCNN:
         pred_box_emb = all_box_emb[tuple(pred_box_idx.T)].transpose((1, 0, 2))
 
         pred_box_batch, pred_box_emb_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_emb, pred_box_prob]))
+        """
 
-        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch) #(B, 300, cam, 4), (B, 300, 3)
+        import pickle
+        data_path = 'data.pickle'
+        '''
+        target_list = [pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins]
+        with open(data_path, 'wb') as f:
+            pickle.dump(target_list, f)
+        '''
+        with open(data_path, 'rb') as f:
+            pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins = pickle.load(f)
+
+        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_images).transpose(1, 0, 2, 3, 4)) #(B, 300, cam, 4), (B, 300, 3)
 
         # convert from (x1,y1,x2,y2) to (x,y,w,h)
         reid_box_pred_batch[:, :, :, 2] -= reid_box_pred_batch[:, :, :, 0]
@@ -258,20 +276,22 @@ class MV_FRCNN:
                 inst_idx += 1
         return all_dets
 
-    def train_batch(self, X, Y, debug_img):
+    def train_batch(self, X, Y, debug_img, extrins):
         loss = np.array([np.Inf]*6)
         num_pos_samples = 0
 
         X_list = list(X)
 
-        rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
-        loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
-        #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
+        loss[0:2] = 0
+        if not self.args.freeze_rpn :
+            rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
+            loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
+            #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
 
-        loss[0:2] = loss_rpn[1:3]
-        loss[0:2] /= self.args.num_valid_cam
+            loss[0:2] = loss_rpn[1:3]
+            loss[0:2] /= self.args.num_valid_cam
 
-        P_rpn = self.model_rpn.predict_on_batch(list(X))
+        P_rpn = self.model_rpn.predict_on_batch(X_list)
 
         R_list = []
         for i in range(self.args.num_valid_cam):
@@ -281,6 +301,8 @@ class MV_FRCNN:
             R = tmp.rpn_to_roi(rpn_probs, rpn_boxs, self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms)
             R_list.append(R)
  
+        #nms_list = [R[2] for R in R_list]
+        #utility.draw_nms(nms_list, debug_img, self.args.rpn_stride) 
 
         pred_box_idx = np.array([R[1] for R in R_list]) #(num_cam, 300, 3)
         pred_box = np.array([R[2] for R in R_list])
@@ -300,15 +322,16 @@ class MV_FRCNN:
         if(ref_pos_neg_idx_batch.size == 0):
             return loss, num_pos_samples
  
+
         ref_pos_neg_idx_batch = np.expand_dims(np.expand_dims(ref_pos_neg_idx_batch, -1), -1)
         vi_loss = self.model_ven.train_on_batch(X_list, ref_pos_neg_idx_batch)
         loss[2] = vi_loss
 
-        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch)
+        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
+        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
 
         X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
         print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
-        print('X2', X2.shape, 'Y1', Y1.shape, 'Y2', Y2.shape)
         num_pos_samples = num_pos_samples[0]
 
         if X2.shape[1] == self.args.num_rois:
@@ -322,7 +345,7 @@ class MV_FRCNN:
             loss[3:5] = loss_class[1:3]
             loss[-1] = loss[:-1].sum()
 
-            #cls_box, cls_prob = utility.classfier_output_to_box_prob(np.array(X2_list), Y1, Y2, self.args, 0, self.args.num_valid_cam, False)
+            #cls_box, cls_prob = utility.classifier_output_to_box_prob(np.array(X2_list), Y1, Y2, self.args, 0, self.args.num_valid_cam, False)
             #utility.draw_cls_box_prob(debug_img, cls_box, cls_prob, self.args, self.args.num_valid_cam, is_nms=False)
 
         return loss, num_pos_samples

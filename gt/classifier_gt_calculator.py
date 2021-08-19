@@ -41,7 +41,7 @@ class CLASSIFIER_GT_CALCULATOR:
         num_inst = len(gt_insts)
         boxes = np.zeros((num_inst, self.num_cam, 4))
         cls = np.zeros((num_inst, ), dtype='int')
-        is_valid = np.zeros((num_inst, self.num_cam))
+        is_valid = np.zeros((num_inst, self.num_cam), dtype='uint8')
         for i, gt_inst in enumerate(gt_insts):
             cls[i] =  gt_inst['cls']
             for cam_idx, box in list(gt_inst['resized_box'].items()) :
@@ -71,7 +71,8 @@ class CLASSIFIER_GT_CALCULATOR:
             best_gt_idx = -1
             is_neg = 0
             for gt_idx, (gt_boxes, is_gt_valid) in enumerate(zip(all_gt_boxes, is_gt_box_valid)):
-                common_cam_idx = np.where((is_gt_valid == is_pred_valid) & (is_pred_valid == 1))
+                #common_cam_idx = np.where((is_gt_valid == is_pred_valid) & (is_pred_valid == 1))
+                common_cam_idx = np.where(is_gt_valid & is_pred_valid)
                 if common_cam_idx[0].size == 0: 
                     continue
                 valid_pred_boxes = pred_boxes[common_cam_idx]
@@ -83,7 +84,8 @@ class CLASSIFIER_GT_CALCULATOR:
                     best_iou = cur_iou 
                     best_iou_list = cur_iou_list 
                     best_gt_idx = gt_idx
-                    if not np.array_equal(is_gt_valid, is_pred_valid) : is_neg = 1
+                    #if not np.array_equal(is_gt_valid, is_pred_valid) : is_neg = 1
+                    if not np.array_equal(np.where(is_gt_valid), np.where(is_pred_valid)) : is_neg = 1
 
             if is_neg :
                     neg_idx.append(pred_idx)

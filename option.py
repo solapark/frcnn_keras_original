@@ -23,7 +23,6 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'])
 parser.add_argument("--train_path", help="Path to training data.")
 parser.add_argument("--val_path",  help="Path to val data.")
-parser.add_argument("--val_models_path", help="Path to val data.")
 parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
 parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
 parser.add_argument("--val_interval", default = 1, type=int, help="intervalof models to be validated")
@@ -53,6 +52,7 @@ parser.add_argument("--base_path", help= "base path",  default="/data3/sap/frcnn
 parser.add_argument("--save_dir", help= "save_dir",  default=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S'))
 parser.add_argument("--reset", help="reset save_dir", action="store_true", default=False)
 parser.add_argument('--resume', action="store_true", default=False, help='resume from last checkpoint')
+parser.add_argument("--freeze_rpn", action="store_true", default=False)
 
 #anchor
 parser.add_argument("--anchor_box_scales", nargs=3, default=[64, 128, 256], help="anchor box scales")
@@ -89,8 +89,12 @@ parser.add_argument('--rpn_min_overlap', type=float, default=.3,
 #ven
 parser.add_argument('--num_max_ven_samples', type=int, default=16, help='size of reid embedding')
 parser.add_argument('--view_invar_feature_size', type=int, default=128, help='size of reid embedding')
-parser.add_argument('--reid_min_emb_dist', type=float, default=.4, help='minimum embedding distance to match two pred boxes')
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
+
+#reid
+parser.add_argument('--is_use_epipolar', action="store_true", default=True)
+parser.add_argument('--reid_min_emb_dist', type=float, default=.5, help='minimum embedding distance to match two pred boxes')
+parser.add_argument('--max_dist_epiline_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar line')
 
 
 #reid_gt

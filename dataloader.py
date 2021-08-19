@@ -4,6 +4,7 @@ import os
 
 from data.image_dataloader import IMAGE_DATALOADER
 from data.label_dataloader import LABEL_DATALOADER
+from data.extrins_dataloader import EXTRINS_DATALOADER
 
 class DATALOADER :
     #def __init__(self, json_path, dataset_name, im_size, mode, batch_size, shuffle):
@@ -34,6 +35,9 @@ class DATALOADER :
 
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
+            if self.args.is_use_epipolar : 
+                extrins_list = self.get_extrins_list(data)
+                self.extrins_dataloader = EXTRINS_DATALOADER(extrins_list, self.batch_size)
             self.label_dataloader = LABEL_DATALOADER(self.resized_instance_list, self.batch_size)
 
         self.indices = np.arange(len(self.image_dataloader))
@@ -57,6 +61,18 @@ class DATALOADER :
                 path_dict[cam_num] = path
             img_path_list.append(path_dict)
         return img_path_list
+
+    def get_extrins_list(self, json):
+        extrins_list_of_list = [] 
+        for scene_content in list(json['scenes'].values()):
+            extrins_list = []
+            for cam_num, camera_content in scene_content['cameras'].items():
+                cam_num = int(cam_num)
+                if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
+                if cam_num >= self.args.num_valid_cam : break
+                extrins_list.append(camera_content['extrinsics'])
+            extrins_list_of_list.append(extrins_list)
+        return extrins_list_of_list
 
     def get_instance_list(self, json, width, height, resized_width, resized_height):
         zoom_in_w = resized_width / float(width)
@@ -88,12 +104,17 @@ class DATALOADER :
         return len(self.image_dataloader)
 
     def __getitem__(self, idx):
+        items = []
         if self.mode == 'demo':
-            return self.image_dataloader[idx]
+            items.append( self.image_dataloader[idx])
         elif self.mode == 'train' or self.mode == 'val':
-            return self.image_dataloader[idx], self.label_dataloader[idx]
+            items.extend( [self.image_dataloader[idx], self.label_dataloader[idx]])
         elif self.mode == 'test' :
-            return self.image_dataloader[idx], self.label_dataloader[idx], self.img_path_list[idx]
+            items.extend( [self.image_dataloader[idx], self.label_dataloader[idx], self.img_path_list[idx]])
+
+        if self.args.is_use_epipolar : 
+            items.append(self.extrins_dataloader[idx])
+        return items
 
     def on_epoch_end(self):
         if(self.shuffle) : 
@@ -101,6 +122,9 @@ class DATALOADER :
         self.image_dataloader.set_indices(self.indices)
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.label_dataloader.set_indices(self.indices)
+
+        if self.args.is_use_epipolar : 
+            self.extrins_dataloader.set_indices(self.indices)
 
 if __name__ == '__main__' :
     mode = 'train'

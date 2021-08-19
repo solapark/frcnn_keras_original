@@ -3,10 +3,12 @@ from scipy.spatial.transform import Rotation as R
 from sympy import symbols
 import utility
 import cv2
+import json
 
 class EPIPOLAR :
     def __init__(self, args):
-        self.intrin = args.intrin #(num_valid_cam, 3, 3)
+        self.num_cam = args.num_valid_cam
+        self.max_dist_epiline_to_box = args.max_dist_epiline_to_box
         self.num_valid_cam = args.num_valid_cam
 
         self.rpn_stride = args.rpn_stride
@@ -18,6 +20,25 @@ class EPIPOLAR :
         self.zoom_out_h = args.rpn_stride * self.height/args.resized_height
 
         self.diag = np.sqrt(args.width**2 + args.height**2)
+
+        if args.mode == 'train':
+            dataset_path = args.train_path
+        elif args.mode == 'val' or args.mode == 'val_models':
+            dataset_path = args.val_path
+        elif args.mode == 'test':
+            dataset_path = args.test_path
+            
+        self.intrin = self.parse_intrin(dataset_path) #(num_valid_cam, 3, 3)
+
+        self.args = args
+
+    def parse_intrin(self, path):
+        with open(path) as fp: 
+            j = json.load(fp)
+
+        intrins = j['intrinsics']
+        intrins = [np.array(arr).reshape(3, 3) for arr in intrins.values()]
+        return np.array(intrins)
 
     def reset(self, extrins, debug_imgs) :
         self.calc_T_a2b(extrins)
@@ -38,7 +59,7 @@ class EPIPOLAR :
         dst_reuslt_img = utility.draw_box(dst_img, box2, name = None, color = (0, 0, 255), is_show = False)
         line_start = (0, int(-c/b))
         line_end = (int(self.width), int(-a*self.width/b - c))
-        print('line', line_start, line_end)
+        print('box', box1, 'box', box2, 'line', line_start, line_end)
         dst_reuslt_img = utility.draw_line(dst_reuslt_img, line_start, line_end)
         dst_reuslt_img = cv2.circle(dst_reuslt_img, tuple(map(int, foot)), 5, (0, 0, 255), -1)
 
@@ -97,42 +118,46 @@ class EPIPOLAR :
                 epipole1_in2_2dpt = np.matmul(self.intrin[j], epipole1_in2_3dpt)
                 self.epipole[i, j] = epipole1_in2_2dpt[:2] / epipole1_in2_2dpt[2]
 
+    def get_epipolar_lines(self, ref_cam_idx, ref_box):
+        epipolar_line_dict = {}
+        for offset in range(1, self.num_cam):
+            target_cam_idx = (ref_cam_idx + offset) % self.num_cam
+            epipolar_line_dict[target_cam_idx] = self.get_epipolar_line(ref_cam_idx, ref_box, target_cam_idx)
 
-    def get_box_ids_on_epiline(self, ref_cam_idx, target_cam_idx, ref_box, target_boxes) :
-        ref_box = ref_box.reshape(-1, 4)
-        dist = self.get_epipolar_dist(ref_cam_idx, target_cam_idx, ref_box, target_boxes)
-        valid_idx = np.where(dist < self.max_dist_to_epipolar_line)[1]
-        return valid_idx
+            '''
+            a, b, c = self.get_epipolar_line(ref_cam_idx, ref_box, target_cam_idx)
+            original_ref_box = self.resized_box_to_original_box(ref_box.reshape(-1, 4))
+            ref_box_center = self.get_boxes_centers(original_ref_box)
+            foot = self.find_foot(a, b, c, ref_box_center[0])
+            self.draw_result(ref_cam_idx, target_cam_idx, original_ref_box[0], original_ref_box[0], foot, a, b, c)
+            '''
 
-    def get_epipolar_line_cross_pnt(ref_cam1_idx, ref_box1, ref_cam2_idx, ref_box2, target_cam_idx) :
+        return epipolar_line_dict
 
-        ref1_T_a2b = self.T_a2b[ref_cam1_idx, target_cam_idx]
-        ref2_T_a2b = self.T_a2b[ref_cam2_idx, target_cam_idx]
-        ref1_epipole1_in2_2dpt = self.epipole[ref_cam1_idx, target_cam_idx]
-        ref2_epipole1_in2_2dpt = self.epipole[ref_cam2_idx, target_cam_idx]
+    def get_epipolar_line(self, ref_cam_idx, ref_box, target_cam_idx):
+        ref_T_a2b = self.T_a2b[ref_cam_idx, target_cam_idx]
+        ref_epipole_in2_2dpt = self.epipole[ref_cam_idx, target_cam_idx]
 
-        ref1_intrin = self.intrin[ref_cam1_idx]
-        ref2_intrin = self.intrin[ref_cam2_idx]
+        ref_intrin = self.intrin[ref_cam_idx]
         target_intrin = self.intrin[target_cam_idx]
 
-        epipolar_line1 = get_epipolar_line(self, ref1_T_a2b, ref1_epipole1_in2_2dpt, ref1_intrin, target_intrin, ref_box1)
-        epipolar_line2 = get_epipolar_line(self, ref2_T_a2b, ref2_epipole1_in2_2dpt, ref2_intrin, target_intrin, ref_box2)
-
-        cross_pnt = self.solve_system_of_equations(epipolar_line1, epipolar_line2)
-        return cross_pnt
+        #print(ref_T_a2b, ref_epipole_in2_2dpt, ref_intrin, target_intrin, ref_box)
+        epipolar_line = self.calc_epipolar_line(ref_T_a2b, ref_epipole_in2_2dpt, ref_intrin, target_intrin, ref_box)
+        return epipolar_line
 
     def solve_system_of_equations(self, eq1, eq2):
         a1, b1, c1 = eq1
         a2, b2, c2 = eq2
-        y = symbol('y')
-        equation1 = a1*x + b1*y + c1
-        equation2 = a2*x + b2*y + c2
-        ans = solve((equation1, equation2), dict=True)
-        #[{y: 11/7, x: -1/7}]
-        return ans['x'], ans['y']
 
-    def get_epipolar_line(self, T_a2b, epipole1_in2_2dpt, cam1_intrin, cam2_intrin, cam1_box): 
-        x1, y1, x2, y2 = cam1_box
+        A = np.array([[a1, b1], [a2, b2]]) 
+        b = np.array([-c1, -c2])
+
+        x, y = np.linalg.solve(A, b)
+        return x, y
+
+    def calc_epipolar_line(self, T_a2b, epipole1_in2_2dpt, cam1_intrin, cam2_intrin, cam1_box): 
+        cam1_box = self.resized_box_to_original_box(cam1_box.reshape(-1, 4))
+        x1, y1, x2, y2 = cam1_box.reshape(4, )
         bbox1_2dpt = (x1 + x2) / 2, (y1 + y2) / 2
 
         # bbox 1 in camera 2
@@ -140,14 +165,68 @@ class EPIPOLAR :
         bbox1_3dpt = np.array([*bbox1_3dpt.tolist(), 1])
 
         bbox1_in2_3dpt = np.matmul(T_a2b, bbox1_3dpt)[:3]
-        bbox1_in2_2dpt = np.matmul(self.cam2_intrin, bbox1_in2_3dpt)
+        bbox1_in2_2dpt = np.matmul(cam2_intrin, bbox1_in2_3dpt)
         bbox1_in2_2dpt = bbox1_in2_2dpt[:2] / bbox1_in2_2dpt[2]
 
         # find epipolar line
         a, b, c = self.find_line(bbox1_in2_2dpt, epipole1_in2_2dpt)
+        import math
+        if math.isnan(a) :
+            print('bbox1_2dpt', bbox1_2dpt)
+            print('bbox1_in2_3dpt', bbox1_in2_3dpt)
+            print('bbox1_in2_2dpt', bbox1_in2_2dpt)
 
         return a, b, c
 
+    def get_box_idx_on_cross_line(self, line1, line2, boxes) : 
+        cross_pnt = self.solve_system_of_equations(line1, line2)
+        boxes = self.resized_box_to_original_box(boxes)
+        boxes_centers = self.get_boxes_centers(boxes)
+        dist = self.find_dist_pnt2pnts(cross_pnt, boxes_centers) / self.diag
+        valid_idx = np.where(dist < self.max_dist_epiline_to_box/2)
+        return valid_idx
+
+    def draw_boxes_with_epiline(self, ref_cam_idx, ref_box, target_cam_idx, epipolar_line, boxes) :
+        boxes = self.resized_box_to_original_box(boxes)
+        boxes_centers = self.get_boxes_centers(boxes)
+        dists = self.find_dist_line2pnts(epipolar_line, boxes_centers)
+        dists /= self.diag
+
+        original_ref_box = self.resized_box_to_original_box(ref_box.reshape(-1, 4))[0]
+
+        a, b, c = epipolar_line
+
+        for box, dist in zip(boxes, dists) :
+            box_center = ((box[0]+box[2])/2, (box[1]+box[3])/2)
+            foot = self.find_foot(a, b, c, box_center)
+            print('dist', dist, 'thersh', self.max_dist_epiline_to_box)
+            self.draw_result(ref_cam_idx, target_cam_idx, original_ref_box, box, foot, a, b, c)
+
+    def get_box_idx_on_epiline(self, epipolar_line, boxes) :
+        boxes = self.resized_box_to_original_box(boxes)
+        boxes_centers = self.get_boxes_centers(boxes)
+        dist = self.find_dist_line2pnts(epipolar_line, boxes_centers)
+        dist /= self.diag
+        valid_idx = np.where(dist < self.max_dist_epiline_to_box)
+        return valid_idx
+
+    def find_dist_line2pnts(self, line, pnts):
+        a, b, c = line
+        dist = []
+        for pnt in pnts : 
+            foot = self.find_foot(a, b, c, pnt)
+            dist.append(self.find_dist(pnt, foot))
+        return np.array(dist)
+        
+    def find_dist_pnt2pnts(self, pnt, pnts):
+        return np.array( [self.find_dist(pnt, cur_pnt) for cur_pnt in pnts] ) 
+
+    def get_boxes_centers(self, bboxes):
+        x_center = (bboxes[:, 0] + bboxes[:, 2]) / 2
+        y_center = (bboxes[:, 1] + bboxes[:, 3]) / 2
+        return np.column_stack([x_center, y_center])
+
+    """
     def get_epipolar_dist(self, cam1_idx, cam2_idx, bbox_list1_rpn, bbox_list2_rpn):
         '''
         inputs:
@@ -187,7 +266,7 @@ class EPIPOLAR :
             # find epipolar line
             a, b, c = self.find_line(bbox1_in2_2dpt, epipole1_in2_2dpt)
             '''
-            a, b, c = self.get_epipolar_line(T_a2b, epipole1_in2_2dpt, cam1_intrin, cam2_intrin, bbox_list1[i])
+            a, b, c = self.calc_epipolar_line(T_a2b, epipole1_in2_2dpt, cam1_intrin, cam2_intrin, bbox_list1[i])
 
             for j in range(len(bbox_list2)):
                 b2x1, b2y1, b2x2, b2y2 = bbox_list2[j]
@@ -209,3 +288,4 @@ class EPIPOLAR :
         # normalize by diagonal line
         dist_matrix = dist_matrix / self.diag
         return dist_matrix
+    """
