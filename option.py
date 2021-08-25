@@ -87,7 +87,6 @@ parser.add_argument('--rpn_min_overlap', type=float, default=.3,
                     help='threshold for negative sample')
 
 #ven
-<<<<<<< HEAD
 parser.add_argument('--num_max_ven_samples', type=int, default=16, help='size of reid embedding')
 parser.add_argument('--view_invar_feature_size', type=int, default=128, help='size of reid embedding')
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
@@ -105,7 +104,6 @@ parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minim
 
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
-<<<<<<< HEAD
 parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
 
 #classifier_gt
