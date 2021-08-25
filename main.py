@@ -159,3 +159,6 @@ if __name__ == '__main__' :
     elif(args.mode == 'test'):
         test_dataloader = DATALOADER(args, 'test', args.test_path)
         test(args, model, log_manager, img_preprocessor, test_dataloader)
+    elif(args.mode == 'save_rpn_feature'):
+        dataloader = DATALOADER(args, 'save_rpn_feature', args.train_path)
+        save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader, None)
