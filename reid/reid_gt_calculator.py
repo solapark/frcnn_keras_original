@@ -88,17 +88,21 @@ class REID_GT_CALCULATOR:
         image = np.copy(all_images[cam_idx]).squeeze()
         box = all_boxes[(cam_idx, H_idx, W_idx, A_idx)]
         box = (box*rpn_stride).astype(int)
-        utility.draw_box(image, box, name)
+        image = utility.draw_box(image, box, name, is_show=False)
+        return image
 
     def draw_anchor_pos_neg(self, R_list, anchor_pos_neg_idx, debug_img) : 
         all_boxes = [R[0] for R in R_list]
         all_boxes = np.stack(all_boxes, 0) #(num_cam, 4, H, W, A)
         all_boxes = all_boxes.transpose(0, 2, 3, 4, 1) #(num_cam, H, W, A, 4)
-        anc_idx, pos_idx, neg_idx = anchor_pos_neg_idx[0] #(num_sample, 4)
+        anc_idx, pos_idx, neg_idx = anchor_pos_neg_idx[0, :, :, :] #(num_sample, 4)
         for cur_anc_idx, cur_pos_idx, cur_neg_idx in zip(anc_idx, pos_idx, neg_idx) :
-            self.draw_box_from_idx(all_boxes, debug_img, cur_anc_idx, self.rpn_stride, 'anchor')
-            self.draw_box_from_idx(all_boxes, debug_img, cur_pos_idx, self.rpn_stride, 'pos')
-            self.draw_box_from_idx(all_boxes, debug_img, cur_neg_idx, self.rpn_stride, 'neg')
+            image1 = self.draw_box_from_idx(all_boxes, debug_img, cur_anc_idx, self.rpn_stride, 'anchor')
+            image2 = self.draw_box_from_idx(all_boxes, debug_img, cur_pos_idx, self.rpn_stride, 'pos')
+            image3 = self.draw_box_from_idx(all_boxes, debug_img, cur_neg_idx, self.rpn_stride, 'neg')
+            conc_img = utility.get_concat_img([image1, image2, image3])
+            cv2.imshow('anc_pos_neg', conc_img)
+            
             cv2.waitKey(0)
 
 

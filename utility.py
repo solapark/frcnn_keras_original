@@ -796,8 +796,8 @@ def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None)
     if text:
         cv2.putText(image, text, (x1+10, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2)
         
+    image = cv2.resize(image, (320, 180))
     if is_show :
-        image = cv2.resize(image, (320, 180))
         cv2.imshow(name, image)
     return image
 

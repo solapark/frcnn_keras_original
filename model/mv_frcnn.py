@@ -277,12 +277,11 @@ class MV_FRCNN:
         return all_dets
 
     def train_batch(self, X, Y, debug_img, extrins):
-        loss = np.array([np.Inf]*6)
+        loss = np.zeros((6, ), dtype=float)
         num_pos_samples = 0
 
         X_list = list(X)
 
-        loss[0:2] = 0
         if not self.args.freeze_rpn :
             rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
             loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
@@ -328,10 +327,11 @@ class MV_FRCNN:
         loss[2] = vi_loss
 
         reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
-        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+        utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
 
         X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
         print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
+        '''
         num_pos_samples = num_pos_samples[0]
 
         if X2.shape[1] == self.args.num_rois:
@@ -347,5 +347,6 @@ class MV_FRCNN:
 
             #cls_box, cls_prob = utility.classifier_output_to_box_prob(np.array(X2_list), Y1, Y2, self.args, 0, self.args.num_valid_cam, False)
             #utility.draw_cls_box_prob(debug_img, cls_box, cls_prob, self.args, self.args.num_valid_cam, is_nms=False)
+        '''
 
         return loss, num_pos_samples

@@ -96,7 +96,8 @@ class REID:
 
                 min_dist_idx, min_dist = get_min_emb_dist_idx(ref_emb, epi_embs, is_want_dist=True)
 
-                if min_dist < self.reid_min_emb_dist and min_dist < match_box_emb_dist :
+                #if min_dist < self.reid_min_emb_dist and min_dist < match_box_emb_dist :
+                if min_dist < match_box_emb_dist :
                     match_box = epi_boxes[min_dist_idx]
                     match_box_cam_idx = target_cam_idx
                     match_box_emb_dist = min_dist

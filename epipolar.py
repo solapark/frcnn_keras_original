@@ -9,6 +9,7 @@ class EPIPOLAR :
     def __init__(self, args):
         self.num_cam = args.num_valid_cam
         self.max_dist_epiline_to_box = args.max_dist_epiline_to_box
+        self.max_dist_epiline_cross_to_box = args.max_dist_epiline_cross_to_box
         self.num_valid_cam = args.num_valid_cam
 
         self.rpn_stride = args.rpn_stride
@@ -183,7 +184,7 @@ class EPIPOLAR :
         boxes = self.resized_box_to_original_box(boxes)
         boxes_centers = self.get_boxes_centers(boxes)
         dist = self.find_dist_pnt2pnts(cross_pnt, boxes_centers) / self.diag
-        valid_idx = np.where(dist < self.max_dist_epiline_to_box/2)
+        valid_idx = np.where(dist < self.max_dist_epiline_cross_to_box)
         return valid_idx
 
     def draw_boxes_with_epiline(self, ref_cam_idx, ref_box, target_cam_idx, epipolar_line, boxes) :
