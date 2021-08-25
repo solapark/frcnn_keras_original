@@ -44,6 +44,23 @@ def iou(a, b):
 
     return float(area_i) / float(area_u + 1e-6)
 
+def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
+    area_i_list, area_u_list = [], []
+    for box_a, box_b, is_valid_a, is_valid_b in zip(boxes_a, boxes_b, is_valids_a, is_valids_b):
+        if is_valid_a and is_valid_b :
+            area_i = intersection(box_a, box_b) 
+        else :
+            area_i = 0
+            if not is_valid_a :
+                box_a = np.zeros((4, ))
+            if not is_valid_b :
+                box_b = np.zeros((4, ))
+        area_u = union(box_a, box_b, area_i)
+        area_i_list.append(area_i)
+        area_u_list.append(area_u)
+
+    return float(sum(area_i_list)) / float(sum(area_u_list) + 1e-6), area_i_list, area_u_list
+
 def union(au, bu, area_intersection):
     area_a = (au[2] - au[0]) * (au[3] - au[1])
     area_b = (bu[2] - bu[0]) * (bu[3] - bu[1])
@@ -55,8 +72,6 @@ def get_concat_img(img_list, cols=3):
     hor_imgs = [np.hstack(img_list[i*cols:(i+1)*cols]) for i in range(rows)]
     ver_imgs = np.vstack(hor_imgs)
     return ver_imgs
-
-
 
 def write_config_sv(path, option, C, is_reset):
     if(is_reset):
@@ -138,7 +153,7 @@ class Data_to_monitor :
         self.data = np.concatenate([self.data, np.array(data).reshape(-1, self.num_data)])
 
     def mean(self):
-        return np.mean(self.data, axis=0)
+        return np.nanmean(self.data, axis=0)
 
     def reset(self):
         self.data = np.zeros((0, self.num_data))
@@ -467,7 +482,7 @@ def get_new_img_size(width, height, img_min_side):
 class Map_calculator:
     #def __init__(self, args, fx, fy):
     def __init__(self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         #self.fx, self.fy = fx, fy         
         self.class_list_wo_bg = args.class_list[:-1]
         self.reset()
@@ -483,11 +498,11 @@ class Map_calculator:
         return [self.get_gt(labels) for labels in labels_batch]
 
     def get_gt(self, labels):
-        gts = [[] for _ in range(self.num_cam)]
+        gts = [[] for _ in range(self.num_valid_cam)]
         for inst in labels :
             gt_cls = self.class_list_wo_bg[inst['cls']]
             gt_boxes = inst['resized_box']
-            for cam_idx in range(self.num_cam) : 
+            for cam_idx in range(self.num_valid_cam) : 
                 if cam_idx in gt_boxes :
                     x1, y1, x2, y2 = gt_boxes[cam_idx]
                     info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
@@ -584,7 +599,7 @@ class Map_calculator:
 
 class Img_preprocessor:
     def __init__ (self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.resized_width, self.resized_height = args.resized_width, args.resized_height
 
         '''
@@ -601,7 +616,7 @@ class Img_preprocessor:
         self.img_channel_mean2 = args.img_channel_mean[2]
         self.img_scaling_factor = args.img_scaling_factor
     def process_batch(self, batch):
-        #batch (num_cam, batch, w, h, c)
+        #batch (num_valid_cam, batch, w, h, c)
         result_batch = []
         for b in np.array(batch).transpose(1, 0, 2, 3, 4) :
             processed_b = [self.process_img(img) for img in b]
@@ -609,7 +624,6 @@ class Img_preprocessor:
         return np.array(result_batch).transpose(1, 0, 2, 3, 4)
         
     def process_img(self, img):
-        img = cv2.resize(img, (self.resized_width, self.resized_height), interpolation=cv2.INTER_CUBIC)
         img = img[:, :, (2, 1, 0)]
         img = img.astype(np.float32)
         img[:, :, 0] -= self.img_channel_mean0
@@ -622,18 +636,18 @@ class Img_preprocessor:
 
 class Sv_gt_batch_generator:
     def __init__(self, args):
-        self.num_cam = args.num_cam
+        self.num_valid_cam = args.num_valid_cam
         self.class_list_wo_bg = args.class_list[:-1]
 
     def get_gt_batch(self, mv_labels_batch):
         return [self.get_gt(mv_labels) for mv_labels in mv_labels_batch]
 
     def get_gt(self, mv_labels):
-        gts = [[] for _ in range(self.num_cam)]
+        gts = [[] for _ in range(self.num_valid_cam)]
         for inst in mv_labels :
             gt_cls = self.class_list_wo_bg[inst['cls']]
             gt_boxes = inst['resized_box']
-            for cam_idx in range(self.num_cam) : 
+            for cam_idx in range(self.num_valid_cam) : 
                 if cam_idx in gt_boxes :
                     x1, y1, x2, y2 = gt_boxes[cam_idx]
                     info = {'class':gt_cls, 'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2}
@@ -674,37 +688,39 @@ def file_system(args):
         os.makedirs(save_path, exist_ok = True)
         os.makedirs(model_path, exist_ok = True)
 
-def draw_cls_box_prob(img_list, bboxes, probs, args, num_cam = 1,is_nms=True) : 
-    _, height,_,_ = img_list[0].shape
+def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=True) : 
+    height,_,_ = img_list[0].shape
     img_min_side = float(args.im_size)
     ratio = img_min_side/height
 
-    all_dets = []
-    for key in bboxes:
+    for key in sorted(bboxes):
         bbox = np.array(bboxes[key]) #(num_cam, num_box, 4)
         if(is_nms):
             new_boxes_all_cam, new_probs = non_max_suppression_fast_multi_cam(bbox, np.array(probs[key]), overlap_thresh=0.5)
         else : 
-            new_boxes_all_cam, new_probs = bbox, np.array(probs[key])
+            new_boxes_all_cam, new_probs, new_ious_all_cam = bbox, np.array(probs[key]), np.array(ious[key])
         instance_to_color = [np.random.randint(0, 255, 3) for _ in range(len(new_probs))]
-        for cam_idx in range(num_cam) : 
-            img = img_list[cam_idx].squeeze().copy()
-            new_boxes = new_boxes_all_cam[cam_idx] #(num_box, 4)
-            for jk in range(new_boxes.shape[0]):
-                (x1, y1, x2, y2) = new_boxes[jk,:]
+        for jk in range(new_boxes_all_cam.shape[1]):
+            new_boxes = new_boxes_all_cam[:, jk] #(num_cam, 4)
+            new_ious = new_ious_all_cam[jk, :] #(num_cam, )
+            all_dets = []
+            result_img_list = []
+            for cam_idx in range(num_cam) : 
+                img = img_list[cam_idx].copy()
+                (x1, y1, x2, y2) = new_boxes[cam_idx]
                 if(x1 == -args.rpn_stride) :
+                    result_img_list.append(np.copy(img))
                     continue 
                 # Calculate real coordinates on original image
-
-                ratio = img_min_side/height
                 (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
 
                 color = (int(instance_to_color[jk][0]), int(instance_to_color[jk][1]), int(instance_to_color[jk][2])) 
                 cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), color, 4)
-                textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
-                all_dets.append((key,100*new_probs[jk]))
+                iou = new_ious[cam_idx]
+                textLabel = '{}: {}, {}'.format(key,int(100*new_probs[jk]), int(100*iou))
+                all_dets.append((key,100*new_probs[jk], iou))
                 (retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
-                textOrg = (real_x1, real_y1-0)
+                textOrg = (real_x1, real_y1)
                 cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 1)
                 cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
                 cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)

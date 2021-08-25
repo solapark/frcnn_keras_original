@@ -43,23 +43,23 @@ def rpn_loss_cls(num_anchors):
 
 	return rpn_loss_cls_fixed_num
 
-def view_invariant_loss(alpha=.3):
+def ven_loss(alpha=.3):
     """Loss function for rpn classification
     Args:
-        y_pred: view invariant features, shape == (1, num_cam, H, W, A, vi_featue_size)
-        y_true: anchor_target idx, shape == (1, 2, num_GT, 4)
+        y_pred: view invariant features, shape == (1, num_cam, 300, vi_featue_size)
+        y_true: anchor_target idx, shape == (1, 2, num_GT, 2)
             first : batch_size(dummy)
             second : anchor or target ?
             third : GT idx
-            fourth : cam, H, W, A
+            fourth : cam_idx, nms_idx
     Returns:
     """
     def triplet_loss_func(y_true, y_pred):
-        y_true = y_true[0, :, :, :, 0, 0]
-        y_true = tf.cast(y_true, 'int32') #(3, numSample, 4)
-        anchor_idx = y_true[0] #(numSample, 4)
-        pos_idx = y_true[1] #(numSample, 4)
-        neg_idx = y_true[2] #(numSample, 4)
+        y_true = y_true[0, :, :, :]
+        y_true = tf.cast(y_true, 'int32') #(2, numSample, 2)
+        anchor_idx = y_true[0] #(numSample, 2)
+        pos_idx = y_true[1] #(numSample, 2)
+        neg_idx = y_true[2] #(numSample, 2)
 
         anchor = tf.gather_nd(y_pred[0], anchor_idx) #(numSample, vi_feature_size)
         positive = tf.gather_nd(y_pred[0], pos_idx) #(numSample, vi_feature_size)

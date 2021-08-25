@@ -151,6 +151,7 @@ def apply_regr_np(X, T):
 		print(e)
 		return X
 
+'''
 def non_max_suppression_fast(boxes, probs, overlap_thresh=0.9, max_boxes=300):
 	# code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
 	# if there are no boxes, return an empty list
@@ -289,6 +290,7 @@ def rpn_to_roi(rpn_layer, regr_layer, args, dim_ordering, use_regr=True, max_box
 	result = non_max_suppression_fast(all_boxes, all_probs, overlap_thresh=overlap_thresh, max_boxes=max_boxes)[0]
 
 	return result
+'''
 
 '''
 def get_classifier_samples(X2, Y1, Y2, num_rois, num_neg, num_pos):
@@ -309,5 +311,179 @@ def get_classifier_samples(X2, Y1, Y2, num_rois, num_neg, num_pos):
 
         return X2[:, sel_samples, :], Y1[:, sel_samples, :], Y2[:, sel_samples, :]
 '''
+
+def non_max_suppression_fast(boxes, probs, overlap_thresh=0.9, max_boxes=300):
+    # code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
+    # if there are no boxes, return an empty list
+
+    # Process explanation:
+    #   Step 1: Sort the probs list
+    #   Step 2: Find the larget prob 'Last' in the list and save it to the pick list
+    #   Step 3: Calculate the IoU with 'Last' box and other boxes in the list. If the IoU is larger than overlap_threshold, delete the box from list
+    #   Step 4: Repeat step 2 and step 3 until there is no item in the probs list 
+    if len(boxes) == 0:
+        return []
+
+    # grab the coordinates of the bounding boxes
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+
+#    np.testing.assert_array_less(x1, x2)
+#    np.testing.assert_array_less(y1, y2)
+
+    # if the bounding boxes integers, convert them to floats --
+    # this is important since we'll be doing a bunch of divisions
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+
+    # initialize the list of picked indexes 
+    pick = []
+
+    # calculate the areas
+    area = (x2 - x1) * (y2 - y1)
+
+    # sort the bounding boxes 
+    idxs = np.argsort(probs)
+
+    # sort the bounding boxes 
+    invalid_idxs = np.where((x1[idxs] - x2[idxs] >= 0) | (y1[idxs] - y2[idxs] >= 0))
+    idxs = np.delete(idxs, invalid_idxs, 0)
+    np.testing.assert_array_less(x1[idxs], x2[idxs])
+    np.testing.assert_array_less(y1[idxs], y2[idxs])
+
+    # keep looping while some indexes still remain in the indexes
+    # list
+    while len(idxs) > 0:
+        # grab the last index in the indexes list and add the
+        # index value to the list of picked indexes
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+        # find the intersection
+
+        xx1_int = np.maximum(x1[i], x1[idxs[:last]])
+        yy1_int = np.maximum(y1[i], y1[idxs[:last]])
+        xx2_int = np.minimum(x2[i], x2[idxs[:last]])
+        yy2_int = np.minimum(y2[i], y2[idxs[:last]])
+
+        ww_int = np.maximum(0, xx2_int - xx1_int)
+        hh_int = np.maximum(0, yy2_int - yy1_int)
+
+        area_int = ww_int * hh_int
+
+        # find the union
+        area_union = area[i] + area[idxs[:last]] - area_int
+
+        # compute the ratio of overlap
+        overlap = area_int/(area_union + 1e-6)
+
+        # delete all indexes from the index list that have
+        idxs = np.delete(idxs, np.concatenate(([last],
+            np.where(overlap > overlap_thresh)[0])))
+
+        if len(pick) >= max_boxes:
+            break
+
+    # return only the bounding boxes that were picked using the integer data type
+    boxes_idx = pick
+    boxes = boxes[pick].astype("int")
+    probs = probs[pick]
+    return boxes_idx, boxes, probs
+
+def rpn_to_roi(rpn_layer, regr_layer, C, dim_ordering, use_regr=True, max_boxes=300,overlap_thresh=0.9):
+    """Convert rpn layer to roi bboxes
+
+    Args: (num_anchors = 9)
+        rpn_layer: output layer for rpn classification 
+            shape (1, feature_map.height, feature_map.width, num_anchors)
+            Might be (1, 18, 25, 18) if resized image is 400 width and 300
+        regr_layer: output layer for rpn regression
+            shape (1, feature_map.height, feature_map.width, num_anchors)
+            Might be (1, 18, 25, 72) if resized image is 400 width and 300
+        C: config
+        use_regr: Wether to use bboxes regression in rpn
+        max_boxes: max bboxes number for non-max-suppression (NMS)
+        overlap_thresh: If iou in NMS is larger than this threshold, drop the box
+
+    Returns:
+        result: boxes from non-max-suppression (shape=(300, 4))
+            boxes: coordinates for bboxes (on the feature map)
+    """
+    regr_layer = regr_layer / C.rpn_std_scaling
+
+    anchor_sizes = C.anchor_box_scales   # (3 in here)
+    anchor_ratios = C.anchor_box_ratios  # (3 in here)
+
+    assert rpn_layer.shape[0] == 1
+
+    (rows, cols) = rpn_layer.shape[1:3]
+
+    curr_layer = 0
+
+    # A.shape = (4, feature_map.height, feature_map.width, num_anchors) 
+    # Might be (4, 18, 25, 18) if resized image is 400 width and 300
+    # A is the coordinates for 9 anchors for every point in the feature map 
+    # => all 18x25x9=4050 anchors cooridnates
+    A = np.zeros((4, rpn_layer.shape[1], rpn_layer.shape[2], rpn_layer.shape[3]))
+
+    for anchor_size in anchor_sizes:
+        for anchor_ratio in anchor_ratios:
+            # anchor_x = (128 * 1) / 16 = 8  => width of current anchor
+            # anchor_y = (128 * 2) / 16 = 16 => height of current anchor
+            anchor_x = (anchor_size * anchor_ratio[0])/C.rpn_stride
+            anchor_y = (anchor_size * anchor_ratio[1])/C.rpn_stride
+            
+            # curr_layer: 0~8 (9 anchors)
+            # the Kth anchor of all position in the feature map (9th in total)
+            regr = regr_layer[0, :, :, 4 * curr_layer:4 * curr_layer + 4] # shape => (18, 25, 4)
+            regr = np.transpose(regr, (2, 0, 1)) # shape => (4, 18, 25)
+
+            # Create 18x25 mesh grid
+            # For every point in x, there are all the y points and vice versa
+            # X.shape = (18, 25)
+            # Y.shape = (18, 25)
+            X, Y = np.meshgrid(np.arange(cols),np. arange(rows))
+
+            # Calculate anchor position and size for each feature map point
+            A[0, :, :, curr_layer] = X - anchor_x/2 # Top left x coordinate
+            A[1, :, :, curr_layer] = Y - anchor_y/2 # Top left y coordinate
+            A[2, :, :, curr_layer] = anchor_x       # width of current anchor
+            A[3, :, :, curr_layer] = anchor_y       # height of current anchor
+
+            # Apply regression to x, y, w and h if there is rpn regression layer
+            if use_regr:
+                A[:, :, :, curr_layer] = apply_regr_np(A[:, :, :, curr_layer], regr)
+
+            # Avoid width and height exceeding 1
+            A[2, :, :, curr_layer] = np.maximum(1, A[2, :, :, curr_layer])
+            A[3, :, :, curr_layer] = np.maximum(1, A[3, :, :, curr_layer])
+
+            # Convert (x, y , w, h) to (x1, y1, x2, y2)
+            # x1, y1 is top left coordinate
+            # x2, y2 is bottom right coordinate
+            A[2, :, :, curr_layer] += A[0, :, :, curr_layer]
+            A[3, :, :, curr_layer] += A[1, :, :, curr_layer]
+
+            # Avoid bboxes drawn outside the feature map
+            A[0, :, :, curr_layer] = np.maximum(0, A[0, :, :, curr_layer])
+            A[1, :, :, curr_layer] = np.maximum(0, A[1, :, :, curr_layer])
+            A[2, :, :, curr_layer] = np.minimum(cols-1, A[2, :, :, curr_layer])
+            A[3, :, :, curr_layer] = np.minimum(rows-1, A[3, :, :, curr_layer])
+
+            curr_layer += 1
+
+    all_boxes = np.reshape(A.transpose((0, 3, 1, 2)), (4, -1)).transpose((1, 0))  # shape=(4050, 4)
+    all_probs = rpn_layer.transpose((0, 3, 1, 2)).reshape((-1))                   # shape=(4050,)
+
+    # Apply non_max_suppression
+    # Only extract the bboxes. Don't need rpn probs in the later process
+    #result = non_max_suppression_fast(all_boxes, all_probs, overlap_thresh=overlap_thresh, max_boxes=max_boxes)[0]
+    nms_idx_1d, nms_boxes, nms_probs = non_max_suppression_fast(all_boxes, all_probs, overlap_thresh=overlap_thresh, max_boxes=max_boxes)
+
+    nms_idx_A, nms_idx_H, nms_idx_W = np.unravel_index(nms_idx_1d, (rpn_layer.shape[3], rpn_layer.shape[1], rpn_layer.shape[2]))
+    nms_idx_2d = np.column_stack((nms_idx_H, nms_idx_W, nms_idx_A))
+    return [A, nms_idx_2d, nms_boxes, nms_probs]
 
 

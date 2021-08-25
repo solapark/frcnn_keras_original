@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #train mv_interpark18
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset  --mode train --dataset INTERPARK18 --save_dir interpark18 --input_weight_path /data3/sap/frcnn_keras_original/model/interpark18_rpn_only.hdf5 --num_valid_cam 3 --train_path /data3/sap/frcnn_keras_original/data/INTERPARK18/train.json 
 

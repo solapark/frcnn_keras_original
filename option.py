@@ -40,7 +40,7 @@ parser.add_argument("-rot", "--rot_90", help="Augment with 90 degree rotations i
 
 #log
 parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'ven', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
-parser.add_argument("--print_every", default=10, help="print every iter")
+parser.add_argument("--print_every", default=10, type=int, help="print every iter")
 
 #train_spec
 parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
@@ -87,6 +87,7 @@ parser.add_argument('--rpn_min_overlap', type=float, default=.3,
                     help='threshold for negative sample')
 
 #ven
+<<<<<<< HEAD
 parser.add_argument('--num_max_ven_samples', type=int, default=16, help='size of reid embedding')
 parser.add_argument('--view_invar_feature_size', type=int, default=128, help='size of reid embedding')
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
@@ -104,13 +105,13 @@ parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minim
 
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
+<<<<<<< HEAD
 parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
 
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
 parser.add_argument('--classifier_max_overlap', type=float, default=.5, help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=.1, help='threshold for negative sample')
-
 
 args = parser.parse_args()
 

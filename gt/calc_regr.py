@@ -10,6 +10,9 @@ class CALC_REGR:
 
         tx = (cx_gt - cx_pred) / w_pred
         ty = (cy_gt - cy_pred) / h_pred
+        if((w_gt==0).any()):
+            print('warning')
+
         tw = np.log(w_gt/w_pred)
         th = np.log(h_gt/h_pred)
 

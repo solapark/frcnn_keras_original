@@ -10,12 +10,11 @@ import random
 from loss import losses
 from gt import roi_helpers
 from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
+from gt.reid import REID
+from gt.reid_gt_calculator import REID_GT_CALCULATOR
 from gt.classifier_gt_calculator import CLASSIFIER_GT_CALCULATOR
-from reid.reid import REID
-from reid.reid_gt_calculator import REID_GT_CALCULATOR
 
 import utility
-import tmp
 
 def make_model(args):
     return MV_FRCNN(args)
