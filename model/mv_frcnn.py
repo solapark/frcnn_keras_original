@@ -106,7 +106,8 @@ class MV_FRCNN:
             body = rpn_body(shared_layers[i])
             cls = rpn_class(body)
             regr = rpn_regr(body)
-            view_invariant = view_invariant_layer(body)
+            #view_invariant = view_invariant_layer(body)
+            view_invariant = view_invariant_layer(shared_layers[i])
             rpns.extend([cls, regr])
             view_invariants.append(view_invariant)
 
@@ -153,14 +154,16 @@ class MV_FRCNN:
             cls = rpn_class(body)
             regr = rpn_regr(body)
             rpns.extend([cls, regr, shared_layers[i], body])
-            view_invariant = view_invariant_layer(rpn_body_input[i])
+            #view_invariant = view_invariant_layer(rpn_body_input[i])
+            view_invariant = view_invariant_layer(shared_layers[i])
             view_invariants.append(view_invariant)
 
         view_invariant_conc = basenet.view_invariant_conc_layer(view_invariants)
         classifier = basenet.classifier_layer(feature_map_input, roi_input, args.num_rois, args.shared_layer_channels, args.num_valid_cam, nb_classes=args.num_cls_with_bg)
 
         model_rpn = Model(img_input, rpns)
-        model_ven = Model(rpn_body_input, view_invariant_conc)
+        #model_ven = Model(rpn_body_input, view_invariant_conc)
+        model_ven = Model(feature_map_input, view_invariant_conc)
         classifier_input = feature_map_input + roi_input
         model_classifier = Model(classifier_input, classifier)
 
@@ -326,7 +329,7 @@ class MV_FRCNN:
         vi_loss = self.model_ven.train_on_batch(X_list, ref_pos_neg_idx_batch)
         loss[2] = vi_loss
 
-        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
+        #reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
         #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
 
         #X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)

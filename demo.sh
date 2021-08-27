@@ -24,3 +24,10 @@ CUDA_VISIBLE_DEVICES='' python -m pdb main.py --mode val_models --dataset MESSYT
  
 #test messytable 
 CUDA_VISIBLE_DEVICES='' python -m pdb main.py  --mode test --dataset MESSYTABLE --save_dir messytable --input_weight_path /data3/sap/frcnn_keras_original/experiment/messytable/model/model_9.hdf5 --num_valid_cam 3 --test_path /data1/sap/MessyTable/labels/test.json
+
+
+# train reid from shared feat
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir reid_from_shared_feat --input_weight_path /data3/sap/frcnn_keras_original/model/messytable_rpn_only.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn
+
+### debug
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir tmp --input_weight_path /data3/sap/frcnn_keras_original/experiment/messytable_rpn_reid_only/model/model_99.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn
