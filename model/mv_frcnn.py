@@ -10,11 +10,12 @@ import random
 from loss import losses
 from gt import roi_helpers
 from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
-from gt.reid import REID
-from gt.reid_gt_calculator import REID_GT_CALCULATOR
+from reid.reid import REID
+from reid.reid_gt_calculator import REID_GT_CALCULATOR
 from gt.classifier_gt_calculator import CLASSIFIER_GT_CALCULATOR
 
 import utility
+import tmp
 
 def make_model(args):
     return MV_FRCNN(args)
@@ -64,7 +65,7 @@ class MV_FRCNN:
         for i in range(self.args.num_valid_cam) : 
             rpn_loss.extend([losses.rpn_loss_cls(self.args.num_anchors), losses.rpn_loss_regr(self.args.num_anchors)])
         self.model_rpn.compile(optimizer=optimizer, loss=rpn_loss)
-        self.model_ven.compile(optimizer=optimizer_view_invariant, loss=losses.view_invariant_loss(self.args.ven_loss_alpha))
+        self.model_ven.compile(optimizer=optimizer_view_invariant, loss=losses.ven_loss(self.args.ven_loss_alpha))
         self.model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(self.args.num_cls_with_bg-1, self.args.num_valid_cam)])
         self.model_all.compile(optimizer='sgd', loss='mae')
 
@@ -326,10 +327,10 @@ class MV_FRCNN:
         loss[2] = vi_loss
 
         reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
-        utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
 
-        X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
-        print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
+        #X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
+        #print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
         '''
         num_pos_samples = num_pos_samples[0]
 

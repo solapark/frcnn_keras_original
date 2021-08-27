@@ -12,4 +12,4 @@ def get_dataset_info(args):
     args.cls2num = {cls:i for i, cls in enumerate(args.num2cls)} # without bg
     args.width, args.height = obj.width, obj.height
     args.resized_width, args.resized_height = utility.get_new_img_size(args.width, args.height, args.im_size)
-    args.intrin = utility.get_intrin(args.train_path, args.num_valid_cam)
+    #args.intrin = utility.get_intrin(args.train_path, args.num_valid_cam)

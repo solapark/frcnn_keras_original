@@ -41,9 +41,9 @@ class CLASSIFIER_GT_CALCULATOR:
         num_inst = len(gt_insts)
         boxes = np.zeros((num_inst, self.num_valid_cam, 4))
         cls = np.zeros((num_inst, ), dtype='int')
-        is_valid = np.zeros((num_inst, self.num_cam), dtype='uint8')
+        is_valid = np.zeros((num_inst, self.num_valid_cam), dtype='uint8')
         for i, gt_inst in enumerate(gt_insts):
-            cls[i] =  self.args.class_mapping[gt_inst['cls']]
+            cls[i] =  gt_inst['cls']
             for cam_idx, box in list(gt_inst['resized_box'].items()) :
                 boxes[i, cam_idx] = box
                 is_valid[i, cam_idx] = 1
@@ -57,12 +57,10 @@ class CLASSIFIER_GT_CALCULATOR:
         all_gt_boxes, gt_cls, is_gt_box_valid = self.get_gt_insts_box_cls(gt_insts)
         all_gt_boxes = np.around(all_gt_boxes/self.rpn_stride)
         pos_pred_idx, pos_gt_idx, neg_idx = [], [], []
-        pos_iou_list = []
-        neg_iou_list = []
         for pred_idx, (pred_boxes, is_pred_valid) in enumerate(zip(all_pred_boxes, is_pred_box_valid)):
             best_iou = 0.0 
             best_gt_idx = -1
-            best_iou_list = None
+            is_neg = 0
             for gt_idx, (gt_boxes, is_gt_valid) in enumerate(zip(all_gt_boxes, is_gt_box_valid)):
                 cur_iou, intersections, unions = utility.mv_iou(pred_boxes, gt_boxes, is_pred_valid, is_gt_valid)
 
@@ -77,7 +75,6 @@ class CLASSIFIER_GT_CALCULATOR:
 
             elif best_iou > self.min_overlap :
                 neg_idx.append(pred_idx)
-                neg_iou_list.append(best_iou_list)
 
         pos_pred_idx, pos_gt_idx = np.array(pos_pred_idx, dtype='int'), np.array(pos_gt_idx, dtype='int')
         neg_pred_idx  = np.array(neg_idx, dtype='int')
@@ -115,17 +112,15 @@ class CLASSIFIER_GT_CALCULATOR:
             Y_regr_pos = np.stack([is_pos_regr_valid, pos_regr], 1)
             Y_regr_pos = Y_regr_pos.reshape((num_pos, -1))
             Y_regr = np.concatenate([Y_regr_neg, Y_regr_pos], 0)
-            iou_list = np.concatenate((neg_iou_list, pos_iou_list), 0)
         else :
             X_box = neg_box
             Y_cls = neg_cls
             Y_regr = Y_regr_neg
-            iou_list = neg_iou_list
 
         X_box[:, :, 2] -= X_box[:, :, 0]
         X_box[:, :, 3] -= X_box[:, :, 1]
 
-        return X_box, Y_cls, Y_regr, iou_list
+        return X_box, Y_cls, Y_regr, num_neg, num_pos
 
 if __name__ == '__main__' :
     random.seed(1)

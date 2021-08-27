@@ -18,7 +18,7 @@ class DATALOADER :
         self.cls2num = args.cls2num
         self.base_dir = args.base_dir
         self.dataset = args.dataset
-        self.img_dir = args.img_dir
+        self.img_dir = args.messytable_img_dir if args.dataset == 'MESSYTABLE' else None
         self.demo_file = args.demo_file
         self.width, self.height = args.width, args.height
         self.resized_width, self.resized_height = args.resized_width, args.resized_height
@@ -33,10 +33,7 @@ class DATALOADER :
         data = self.get_data_from_json(dataset_path)
         self.img_path_list = self.get_img_path_list(data) #X
 
-        self.image_dataloader = IMAGE_DATALOADER(img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
-
-        extrinsic_list = self.get_extrinsic_list(data)
-        self.extrinsic_dataloader = LABEL_DATALOADER(extrinsic_list, self.batch_size)
+        self.image_dataloader = IMAGE_DATALOADER(self.img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
@@ -62,15 +59,18 @@ class DATALOADER :
             img_path_list.append(path_dict)
         return img_path_list
 
-    def get_extrinsic_list(self, json) :
-        extrinsic_list = []
+
+    def get_extrins_list(self, json):
+        extrins_list_of_list = [] 
         for scene_content in list(json['scenes'].values()):
-            cur_extrinsic_list = []
-            for cam_idx, camera_content in list(scene_content['cameras'].items()) :
-                if int(cam_idx) > self.num_valid_cam : continue
-                cur_extrinsic_list.append(camera_content['extrinsics'])
-            extrinsic_list.append(cur_extrinsic_list)    
-        return np.array(extrinsic_list, dtype='float32')
+            extrins_list = []
+            for cam_num, camera_content in scene_content['cameras'].items():
+                cam_num = int(cam_num)
+                if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
+                if cam_num >= self.args.num_valid_cam : break
+                extrins_list.append(camera_content['extrinsics'])
+            extrins_list_of_list.append(extrins_list)
+        return extrins_list_of_list
 
     def get_instance_list(self, json, width, height, resized_width, resized_height):
         zoom_in_w = resized_width / float(width)
@@ -79,29 +79,19 @@ class DATALOADER :
         for scene_content in list(json['scenes'].values()):
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
-<<<<<<< HEAD
                 if self.args.dataset == 'MESSYTABLE' : cls -= 1
                 resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
                     cam_num = int(cam_num)
                     if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
                     if cam_num >= self.args.num_valid_cam : continue
-=======
-                resized_instance_dict[instance_num] = {'cls':str(cls), 'resized_box':{}}
-                for cam_idx, camera_content in list(scene_content['cameras'].items()) :
-                    if int(cam_idx) > self.num_valid_cam : continue
->>>>>>> 50a289d282bf52f685fdf042dc5288d8610ca82d
                     if instance_num in camera_content['instances'] :
                         x1, y1, x2, y2 = camera_content['instances'][instance_num]['pos']
                         x1 *= zoom_in_w                
                         x2 *= zoom_in_w                
                         y1 *= zoom_in_h                
                         y2 *= zoom_in_h                
-<<<<<<< HEAD
                         resized_instance_dict[instance_num]['resized_box'][cam_num] = list(map(float, [x1, y1, x2, y2]))
-=======
-                        resized_instance_dict[instance_num]['resized_box'][int(cam_idx)-1] = list(map(float, [x1, y1, x2, y2]))
->>>>>>> 50a289d282bf52f685fdf042dc5288d8610ca82d
 
             resized_instance_list.append(list(resized_instance_dict.values()))
         self.zoom_in_w = zoom_in_w
@@ -114,7 +104,6 @@ class DATALOADER :
     def __getitem__(self, idx):
         items = []
         if self.mode == 'demo':
-<<<<<<< HEAD
             items.append( self.image_dataloader[idx])
         elif self.mode == 'train' or self.mode == 'val':
             items.extend( [self.image_dataloader[idx], self.label_dataloader[idx]])
@@ -124,17 +113,12 @@ class DATALOADER :
         if self.args.is_use_epipolar : 
             items.append(self.extrins_dataloader[idx])
         return items
-=======
-            return self.image_dataloader[idx], self.extrinsic_dataloader[idx]
-        elif self.mode == 'train' or self.mode == 'test' or self.mode == 'val':
-            return self.image_dataloader[idx], self.extrinsic_dataloader[idx], self.label_dataloader[idx] 
->>>>>>> 50a289d282bf52f685fdf042dc5288d8610ca82d
 
     def on_epoch_end(self):
         if(self.shuffle) : 
             np.random.shuffle(self.indices)
         self.image_dataloader.set_indices(self.indices)
-        self.extrinsic_dataloader.set_indices(self.indices)
+        self.extrins_dataloader.set_indices(self.indices)
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
             self.label_dataloader.set_indices(self.indices)
 

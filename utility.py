@@ -996,3 +996,4 @@ def get_value_in_pattern(text, pattern):
     #text = 'aaa_b'
     #return = ['b']
     return re.findall(pattern, text)[0]
+
