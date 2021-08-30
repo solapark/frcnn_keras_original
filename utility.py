@@ -671,13 +671,13 @@ class CALC_REGR:
 
         return np.column_stack([tx, ty, tw, th])
 
-def pickle_save(l, path):
+def pickle_save(path, data):
     f = open(path, 'wb')
-    pickle.dump(l,f)
+    pickle.dump(data,f)
 
 def pickle_load(path) :
     f = open(path, 'rb')
-    return pickle.load(f)
+    return pickle.load(f)[0]
    
 def file_system(args):
     if args.reset and args.mode == 'train' :
@@ -961,6 +961,24 @@ def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
 
     return img
  
+class Rpn_result_saver : 
+    def __init__(self, args):
+        self.args = args
+        self.save_dir = os.path.join(args.base_path, args.rpn_pickle_dir)
+        os.makedirs(self.save_dir, exist_ok=True) 
+
+    def save(self, img_paths, rpn_result):
+        save_path = self.get_general_file_name(img_paths)
+        pickle_save(save_path, rpn_result)
+ 
+    def get_general_file_name(self, img_paths):
+        img_paths = list(img_paths.values())
+        base_name = os.path.basename(img_paths[0])
+        if(self.args.dataset == 'MESSYTABLE'):
+            general_name = get_value_in_pattern(base_name, '(.*)-0[0-9].jpg')
+        general_path = os.path.join(self.save_dir, general_name+'.pickle')
+        return general_path
+
 class Result_saver :
     def __init__(self, args):
         self.args = args
@@ -996,4 +1014,3 @@ def get_value_in_pattern(text, pattern):
     #text = 'aaa_b'
     #return = ['b']
     return re.findall(pattern, text)[0]
-

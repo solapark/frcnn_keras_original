@@ -26,8 +26,8 @@ class EPIPOLAR :
             dataset_path = args.train_path
         elif args.mode == 'val' or args.mode == 'val_models':
             dataset_path = args.val_path
-        elif args.mode == 'test':
-            dataset_path = args.test_path
+        elif args.mode == 'demo':
+            dataset_path = args.demo_path
             
         self.intrin = self.parse_intrin(dataset_path) #(num_valid_cam, 3, 3)
 

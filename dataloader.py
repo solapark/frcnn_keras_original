@@ -5,6 +5,7 @@ import os
 from data.image_dataloader import IMAGE_DATALOADER
 from data.label_dataloader import LABEL_DATALOADER
 from data.extrins_dataloader import EXTRINS_DATALOADER
+from data.rpn_dataloader import RPN_DATALOADER
 
 class DATALOADER :
     #def __init__(self, json_path, dataset_name, im_size, mode, batch_size, shuffle):
@@ -35,12 +36,15 @@ class DATALOADER :
 
         self.image_dataloader = IMAGE_DATALOADER(self.img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
-        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
+        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
             if self.args.is_use_epipolar : 
                 extrins_list = self.get_extrins_list(data)
                 self.extrins_dataloader = EXTRINS_DATALOADER(extrins_list, self.batch_size)
             self.label_dataloader = LABEL_DATALOADER(self.resized_instance_list, self.batch_size)
+
+        if self.args.freeze_rpn :
+            self.rpn_dataloader = RPN_DATALOADER(args, self.img_path_list)
 
         self.indices = np.arange(len(self.image_dataloader))
         self.on_epoch_end()
@@ -105,54 +109,27 @@ class DATALOADER :
         items = []
         if self.mode == 'demo':
             items.append( self.image_dataloader[idx])
-        elif self.mode == 'train' or self.mode == 'val':
+        elif self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models':
             items.extend( [self.image_dataloader[idx], self.label_dataloader[idx]])
-        elif self.mode == 'test' :
-            items.extend( [self.image_dataloader[idx], self.label_dataloader[idx], self.img_path_list[idx]])
+        elif self.mode == 'save_rpn_feature':
+            items.extend( [self.image_dataloader[idx], self.img_path_list[idx]])
 
         if self.args.is_use_epipolar : 
             items.append(self.extrins_dataloader[idx])
+
+        if self.args.freeze_rpn :
+            items.append(self.rpn_dataloader[idx])
+
         return items
 
     def on_epoch_end(self):
         if(self.shuffle) : 
             np.random.shuffle(self.indices)
         self.image_dataloader.set_indices(self.indices)
-        self.extrins_dataloader.set_indices(self.indices)
-        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'test'):
+        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
             self.label_dataloader.set_indices(self.indices)
 
         if self.args.is_use_epipolar : 
             self.extrins_dataloader.set_indices(self.indices)
-
-if __name__ == '__main__' :
-    mode = 'train'
-    dl = DATALOADER(args, mode)
-    import cv2
-    import time
-    from utils import get_concat_img
-    from option import args
-    for idx, batch in enumerate(dl):
-        imgs_in_batch, labels_in_batch = batch
-        for batch_idx, (imgs_in_one_batch, label_in_one_batch) in enumerate(zip(imgs_in_batch, labels_in_batch)):
-            #for inst in label_in_one_batch : print(inst)
-            num_inst = len(label_in_one_batch)
-            color_list = [tuple(np.random.random(size=3)*256) for _ in range(num_inst)]
-            img_list = []
-            for cam_idx, img in enumerate(imgs_in_one_batch) :
-                for inst_idx, inst in enumerate(label_in_one_batch) :
-                    if cam_idx in inst['resized_box'] :
-                        cls_num = inst['cls']
-                        cls = dl.num2cls[cls_num]
-                        x1, y1, x2, y2 = list(map(int, inst['resized_box'][cam_idx]))
-                        color = color_list[inst_idx]
-                        img = cv2.rectangle(img,(x1, y1),(x2, y2),color,3)
-                        put_str = '%s%d' % (cls, inst_idx)
-                        img = cv2.putText(img, put_str, (x1, y1), cv2.FONT_HERSHEY_DUPLEX, 1, color, 2)
-                img_list.append(img)
-            name = 'batch%d' %(batch_idx)
-            concat_img = get_concat_img(img_list)
-            cv2.imshow(name, concat_img)
-        cv2.waitKey()
-
-   
+        if self.args.freeze_rpn :
+            self.rpn_dataloader.set_indices(self.indices)

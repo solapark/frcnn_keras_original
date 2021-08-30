@@ -26,7 +26,10 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         #for idx in range(10):
             timer_data.tic()
             extirns = None
-            if args.is_use_epipolar :
+            rpn_results = None
+            if args.is_use_epipolar and args.freeze_rpn :
+                X_raw, Y, extrins, rpn_results = train_dataloader[idx]
+            elif args.is_use_epipolar :
                 X_raw, Y, extrins = train_dataloader[idx]
             else : 
                 X_raw, Y = train_dataloader[idx]
@@ -35,7 +38,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
 
             timer_model.tic()
 
-            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw, extrins)
+            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw, extrins, rpn_results)
 
             timer_model.hold()
 
@@ -122,7 +125,7 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
 
-def test(args, model, log_manager, img_preprocessor, dataloader):
+def demo(args, model, log_manager, img_preprocessor, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     result_saver = utility.Result_saver(args)
     #model.load(args.input_weight_path)
@@ -138,6 +141,19 @@ def test(args, model, log_manager, img_preprocessor, dataloader):
         #result_saver.save(X_raw, Y, img_paths, all_dets)
         all_dets = model.predict_batch(X, extrins, X_raw)
         result_saver.save(X_raw, Y, img_paths, all_dets)
+        progbar.update(idx+1)
+
+def save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader) :
+    rpn_result_saver = utility.Rpn_result_saver(args)
+    progbar = generic_utils.Progbar(len(dataloader))
+
+    for idx in range(len(dataloader)):
+        X_raw, img_paths = dataloader[idx]
+        X = img_preprocessor.process_batch(X_raw)
+
+        rpn_result = model.rpn_predict_batch(X, X_raw)
+
+        rpn_result_saver.save(img_paths, rpn_result)
         progbar.update(idx+1)
 
 if __name__ == '__main__' :
@@ -156,9 +172,9 @@ if __name__ == '__main__' :
     elif(args.mode == 'val_models'):
         val_dataloader = DATALOADER(args, 'val', args.val_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
-    elif(args.mode == 'test'):
-        test_dataloader = DATALOADER(args, 'test', args.test_path)
-        test(args, model, log_manager, img_preprocessor, test_dataloader)
+    elif(args.mode == 'demo'):
+        dataloader = DATALOADER(args, 'demo', args.demo_path)
+        demo(args, model, log_manager, img_preprocessor, dataloader)
     elif(args.mode == 'save_rpn_feature'):
         dataloader = DATALOADER(args, 'save_rpn_feature', args.train_path)
-        save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader, None)
+        save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader)

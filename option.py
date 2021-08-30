@@ -6,8 +6,8 @@ from template import get_dataset_info
 parser = argparse.ArgumentParser()
 
 #mode
-parser.add_argument('--mode', type=str, default='test', choices=['train', 'val', 'test', 'val_models'])
-parser.add_argument('--test_only', action="store_true", default=False)
+parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature'])
+#parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
 parser.add_argument('--model', type=str, default='mv_frcnn')
@@ -26,7 +26,7 @@ parser.add_argument("--val_path",  help="Path to val data.")
 parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
 parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
 parser.add_argument("--val_interval", default = 1, type=int, help="intervalof models to be validated")
-parser.add_argument("--test_path", help="Path to training data.")
+parser.add_argument("--demo_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
 parser.add_argument("--parser_type", help="Parser to use. One of simple or pascal_voc", default="simple")
 
@@ -53,6 +53,7 @@ parser.add_argument("--save_dir", help= "save_dir",  default=datetime.datetime.n
 parser.add_argument("--reset", help="reset save_dir", action="store_true", default=False)
 parser.add_argument('--resume', action="store_true", default=False, help='resume from last checkpoint')
 parser.add_argument("--freeze_rpn", action="store_true", default=False)
+parser.add_argument("--rpn_pickle_dir", default='rpn_pickle')
 
 #anchor
 parser.add_argument("--anchor_box_scales", nargs=3, default=[64, 128, 256], help="anchor box scales")
@@ -92,7 +93,7 @@ parser.add_argument('--view_invar_feature_size', type=int, default=128, help='si
 parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_alpha')
 
 #reid
-parser.add_argument('--is_use_epipolar', action="store_true", default=True)
+parser.add_argument('--is_use_epipolar', action="store_true", default=False)
 parser.add_argument('--reid_min_emb_dist', type=float, default=.5, help='minimum embedding distance to match two pred boxes')
 parser.add_argument('--max_dist_epiline_to_box', type=float, default=.01, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_cross_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar cross line')

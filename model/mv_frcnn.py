@@ -35,43 +35,62 @@ class MV_FRCNN:
             for layer in self.model_rpn.layers:
                 layer.trainable = False
 
-        self.reid = REID(args)
+        if not self.mode == 'save_rpn_feature' :
+            self.reid = REID(args)
 
         if(self.mode == 'train') :
             self.rpn_gt_calculator = RPN_GT_CALCULATOR(args)
             self.reid_gt_calculator = REID_GT_CALCULATOR(args)
             self.classifier_gt_calculator = CLASSIFIER_GT_CALCULATOR(args)
 
+        self.cam_idx_arr = np.repeat(np.arange(self.args.num_valid_cam), self.args.num_nms).reshape(self.args.num_valid_cam, self.args.num_nms, 1)
        
     def save(self, path):
         self.model_all.save_weights(path)
 
     def load(self, path):
-        self.model_rpn.load_weights(path, by_name=True)
+        if not self.args.freeze_rpn :
+            self.model_rpn.load_weights(path, by_name=True)
+
         self.model_ven.load_weights(path, by_name=True)
         self.model_classifier.load_weights(path, by_name=True)
 
     def compile(self):
-        if(self.mode == 'train'):
-            self.train_compile()
-        else :
-            self.test_compile()
+        if self.mode == 'train' :
+            if not self.args.freeze_rpn :
+                self.rpn_train_compile()
 
-    def train_compile(self):
-        optimizer = Adam(lr=1e-5)
-        optimizer_view_invariant = Adam(lr=1e-5)
-        optimizer_classifier = Adam(lr=1e-5)
+            self.ven_train_compile()
+            self.classifier_train_compile()
+            self.model_all.compile(optimizer='sgd', loss='mae')
+
+        elif self.mode == 'val' or self.mode == 'val_models' or self.mode == 'demo' :
+            self.rpn_test_compile()
+            self.ven_test_compile()
+            self.classifier_test_compile()
+
+        elif self.mode == 'save_rpn_feature':
+            self.rpn_test_compile()
+
+    def rpn_train_compile(self):
         rpn_loss = []
         for i in range(self.args.num_valid_cam) : 
             rpn_loss.extend([losses.rpn_loss_cls(self.args.num_anchors), losses.rpn_loss_regr(self.args.num_anchors)])
-        self.model_rpn.compile(optimizer=optimizer, loss=rpn_loss)
-        self.model_ven.compile(optimizer=optimizer_view_invariant, loss=losses.ven_loss(self.args.ven_loss_alpha))
-        self.model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(self.args.num_cls_with_bg-1, self.args.num_valid_cam)])
-        self.model_all.compile(optimizer='sgd', loss='mae')
+        self.model_rpn.compile(optimizer=Adam(lr=1e-5), loss=rpn_loss)
 
-    def test_compile(self):
+    def rpn_test_compile(self):
         self.model_rpn.compile(optimizer='sgd', loss='mse')
+
+    def ven_train_compile(self) :
+        self.model_ven.compile(optimizer=Adam(lr=1e-5), loss=losses.ven_loss(self.args.ven_loss_alpha))
+
+    def ven_test_compile(self) :
         self.model_ven.compile(optimizer='sgd', loss='mse')
+
+    def classifier_train_compile(self) :
+        self.model_classifier.compile(optimizer=Adam(lr=1e-5), loss=[losses.class_loss_cls, losses.class_loss_regr(self.args.num_cls_with_bg-1, self.args.num_valid_cam)])
+
+    def classifier_test_compile(self) :
         self.model_classifier.compile(optimizer='sgd', loss='mse')
 
     def make_model(self, args, basenet):
@@ -148,17 +167,18 @@ class MV_FRCNN:
         rpn_body, rpn_class, rpn_regr = basenet.rpn_layer_model(args.num_anchors)
         view_invariant_layer = basenet.view_invariant_layer_model(args.grid_rows, args.grid_cols, args.num_anchors, args.view_invar_feature_size)
         rpns = []
-        view_invariants = []
         for i in range(args.num_valid_cam) :
             body = rpn_body(shared_layers[i])
             cls = rpn_class(body)
             regr = rpn_regr(body)
             rpns.extend([cls, regr, shared_layers[i], body])
             #view_invariant = view_invariant_layer(rpn_body_input[i])
-            view_invariant = view_invariant_layer(shared_layers[i])
-            view_invariants.append(view_invariant)
+            #view_invariant = view_invariant_layer(shared_layers[i])
+            #view_invariants.append(view_invariant)
 
+        view_invariants = [view_invariant_layer(feature_map_input[i]) for i in range(args.num_valid_cam)]
         view_invariant_conc = basenet.view_invariant_conc_layer(view_invariants)
+
         classifier = basenet.classifier_layer(feature_map_input, roi_input, args.num_rois, args.shared_layer_channels, args.num_valid_cam, nb_classes=args.num_cls_with_bg)
 
         model_rpn = Model(img_input, rpns)
@@ -168,6 +188,30 @@ class MV_FRCNN:
         model_classifier = Model(classifier_input, classifier)
 
         return model_rpn, model_ven, model_classifier
+
+    def parse_rois(self, rois):
+        pred_box_idx = np.array([R[1] for R in rois]) #(num_cam, 300, 3)
+        pred_box_idx = np.concatenate((self.cam_idx_arr, pred_box_idx), axis = 2)
+        pred_box = np.array([R[2] for R in rois])
+        pred_box_prob = np.array([R[3] for R in rois])
+        return pred_box_idx, pred_box, pred_box_prob
+
+    def to_batch(self, data):
+        return np.expand_dims(data, 0)
+
+    def rpn_predict_batch(self, X, debug_images=None):
+        P_rpn = self.model_rpn.predict_on_batch(list(X))
+
+        shared_feats = [P_rpn[i*4+2] for i in range(self.args.num_valid_cam)]
+        rois = [tmp.rpn_to_roi(P_rpn[i*4], P_rpn[i*4+1], self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms) for i in range(self.args.num_valid_cam)]
+
+        pred_box_idx, pred_box, pred_box_prob = self.parse_rois(rois)
+
+        pred_box_idx_batch = self.to_batch(pred_box_idx)
+        pred_box_batch = self.to_batch(pred_box)
+        pred_box_prob_batch = self.to_batch(pred_box_prob)
+
+        return pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats
 
     def predict_batch(self, X, extrins=None, debug_images=None):
         """
@@ -192,8 +236,7 @@ class MV_FRCNN:
         pred_box = np.array([R[2] for R in R_list])
         pred_box_prob = np.array([R[3] for R in R_list])
 
-        cam_idx_arr = np.repeat(np.arange(self.args.num_valid_cam), self.args.num_nms).reshape(self.args.num_valid_cam, self.args.num_nms, 1)
-        pred_box_idx = np.concatenate((cam_idx_arr, pred_box_idx), axis = 2)
+        pred_box_idx = np.concatenate((self.cam_idx_arr, pred_box_idx), axis = 2)
 
 
         view_invariant_features = self.model_ven.predict_on_batch(rpn_body_list)
@@ -203,6 +246,7 @@ class MV_FRCNN:
         pred_box_batch, pred_box_emb_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_emb, pred_box_prob]))
         """
 
+        """
         import pickle
         data_path = 'data.pickle'
         '''
@@ -212,6 +256,9 @@ class MV_FRCNN:
         '''
         with open(data_path, 'rb') as f:
             pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins = pickle.load(f)
+        """
+
+        #pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_images)
 
         reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_images).transpose(1, 0, 2, 3, 4)) #(B, 300, cam, 4), (B, 300, 3)
 
@@ -279,13 +326,15 @@ class MV_FRCNN:
                 inst_idx += 1
         return all_dets
 
-    def train_batch(self, X, Y, debug_img, extrins):
+    def train_batch(self, X, Y, debug_img, extrins, rpn_result):
         loss = np.zeros((6, ), dtype=float)
         num_pos_samples = 0
 
         X_list = list(X)
 
-        if not self.args.freeze_rpn :
+        if self.args.freeze_rpn :
+            pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result
+        else :
             rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
             loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
             #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
@@ -293,37 +342,37 @@ class MV_FRCNN:
             loss[0:2] = loss_rpn[1:3]
             loss[0:2] /= self.args.num_valid_cam
 
-        P_rpn = self.model_rpn.predict_on_batch(X_list)
+            P_rpn = self.model_rpn.predict_on_batch(X_list)
 
-        R_list = []
-        for i in range(self.args.num_valid_cam):
-            cam_idx = i*2
-            rpn_probs = P_rpn[cam_idx]
-            rpn_boxs = P_rpn[cam_idx+1]
-            R = tmp.rpn_to_roi(rpn_probs, rpn_boxs, self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms)
-            R_list.append(R)
- 
-        #nms_list = [R[2] for R in R_list]
-        #utility.draw_nms(nms_list, debug_img, self.args.rpn_stride) 
+            R_list = []
+            for i in range(self.args.num_valid_cam):
+                cam_idx = i*2
+                rpn_probs = P_rpn[cam_idx]
+                rpn_boxs = P_rpn[cam_idx+1]
+                R = tmp.rpn_to_roi(rpn_probs, rpn_boxs, self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms)
+                R_list.append(R)
+     
+            #nms_list = [R[2] for R in R_list]
+            #utility.draw_nms(nms_list, debug_img, self.args.rpn_stride) 
 
-        pred_box_idx = np.array([R[1] for R in R_list]) #(num_cam, 300, 3)
-        pred_box = np.array([R[2] for R in R_list])
-        pred_box_prob = np.array([R[3] for R in R_list])
-        cam_idx_arr = np.repeat(np.arange(self.args.num_valid_cam), self.args.num_nms).reshape(self.args.num_valid_cam, self.args.num_nms, 1)
-        pred_box_idx = np.concatenate((cam_idx_arr, pred_box_idx), axis = 2)
+            pred_box_idx = np.array([R[1] for R in R_list]) #(num_cam, 300, 3)
+            pred_box = np.array([R[2] for R in R_list])
+            pred_box_prob = np.array([R[3] for R in R_list])
+            pred_box_idx = np.concatenate((self.cam_idx_arr, pred_box_idx), axis = 2)
 
-        view_invariant_features = self.model_ven.predict_on_batch(list(X))
+            pred_box_batch, pred_box_idx_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_idx, pred_box_prob]))
+
+        view_invariant_features = self.model_ven.predict_on_batch(X_list)
         all_box_emb = np.squeeze(view_invariant_features)
-        pred_box_emb = all_box_emb[tuple(pred_box_idx.T)].transpose((1, 0, 2))
+        pred_box_emb = all_box_emb[tuple(pred_box_idx_batch[0].T)].transpose((1, 0, 2))
 
-        pred_box_batch, pred_box_idx_batch, all_box_emb_batch, pred_box_emb_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_idx, all_box_emb, pred_box_emb, pred_box_prob]))
+        all_box_emb_batch, pred_box_emb_batch = list(map(lambda a : np.expand_dims(a, 0), [all_box_emb, pred_box_emb]))
 
         ref_pos_neg_idx_batch = self.reid_gt_calculator.get_batch(pred_box_batch, pred_box_idx_batch, all_box_emb_batch, Y)
         #self.reid_gt_calculator.draw_anchor_pos_neg(R_list, ref_pos_neg_idx_batch, debug_img) 
 
         if(ref_pos_neg_idx_batch.size == 0):
             return loss, num_pos_samples
- 
 
         ref_pos_neg_idx_batch = np.expand_dims(np.expand_dims(ref_pos_neg_idx_batch, -1), -1)
         vi_loss = self.model_ven.train_on_batch(X_list, ref_pos_neg_idx_batch)
