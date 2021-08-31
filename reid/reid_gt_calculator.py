@@ -12,6 +12,15 @@ class REID_GT_CALCULATOR:
         self.reid_gt_min_overlap = args.reid_gt_min_overlap
         self.rpn_stride = args.rpn_stride
  
+    def get_emb_batch(self, pred_box_batch, pred_box_idx_batch, view_emb):
+        all_box_emb = np.squeeze(view_emb)
+        pred_box_emb = all_box_emb[tuple(pred_box_idx_batch[0].T)].transpose((1, 0, 2))
+
+        all_box_emb_batch = np.expand_dims(all_box_emb, 0)
+        pred_box_emb_batch = np.expand_dims(pred_box_emb, 0)
+
+        return all_box_emb_batch, pred_box_emb_batch
+
     def get_batch(self, *args):
         ref_pos_neg_idx_batch = []
         for batch_idx, args_one_batch in enumerate(zip(*args)) :

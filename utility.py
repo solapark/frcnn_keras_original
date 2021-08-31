@@ -677,7 +677,7 @@ def pickle_save(path, data):
 
 def pickle_load(path) :
     f = open(path, 'rb')
-    return pickle.load(f)[0]
+    return pickle.load(f)
    
 def file_system(args):
     if args.reset and args.mode == 'train' :

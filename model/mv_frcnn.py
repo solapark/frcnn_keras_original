@@ -31,9 +31,11 @@ class MV_FRCNN:
         self.model_rpn, self.model_ven, self.model_classifier, self.model_all = self.make_model(args, base_net)
         self.compile()
 
+        '''
         if self.args.freeze_rpn :
             for layer in self.model_rpn.layers:
                 layer.trainable = False
+        '''
 
         if not self.mode == 'save_rpn_feature' :
             self.reid = REID(args)
@@ -94,11 +96,11 @@ class MV_FRCNN:
         self.model_classifier.compile(optimizer='sgd', loss='mse')
 
     def make_model(self, args, basenet):
-        if(args.mode == 'train'):
+        if(args.mode == 'train' and not args.freeze_rpn):
             model_rpn, model_ven, model_classifier, model_all =  self.make_train_model(args, basenet)
         else:
             model_rpn, model_ven, model_classifier =  self.make_test_model(args, basenet)
-            model_all = None
+            _, _, _, model_all =  self.make_train_model(args, basenet)
         return model_rpn, model_ven, model_classifier, model_all
 
     def make_train_model(self, args, basenet):
@@ -333,7 +335,7 @@ class MV_FRCNN:
         X_list = list(X)
 
         if self.args.freeze_rpn :
-            pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result
+            pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result[0]
         else :
             rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
             loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
@@ -362,12 +364,18 @@ class MV_FRCNN:
 
             pred_box_batch, pred_box_idx_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_idx, pred_box_prob]))
 
-        view_invariant_features = self.model_ven.predict_on_batch(X_list)
-        all_box_emb = np.squeeze(view_invariant_features)
+        if self.args.freeze_rpn :
+            view_emb = self.model_ven.predict_on_batch(shared_feats)
+        else :
+            view_emb = self.model_ven.predict_on_batch(X_list)
+
+        '''
+        all_box_emb = np.squeeze(view_emb)
         pred_box_emb = all_box_emb[tuple(pred_box_idx_batch[0].T)].transpose((1, 0, 2))
 
         all_box_emb_batch, pred_box_emb_batch = list(map(lambda a : np.expand_dims(a, 0), [all_box_emb, pred_box_emb]))
-
+        '''
+        all_box_emb_batch, pred_box_emb_batch = self.reid_gt_calculator.get_emb_batch(pred_box_batch, pred_box_idx_batch, view_emb) 
         ref_pos_neg_idx_batch = self.reid_gt_calculator.get_batch(pred_box_batch, pred_box_idx_batch, all_box_emb_batch, Y)
         #self.reid_gt_calculator.draw_anchor_pos_neg(R_list, ref_pos_neg_idx_batch, debug_img) 
 
@@ -375,15 +383,20 @@ class MV_FRCNN:
             return loss, num_pos_samples
 
         ref_pos_neg_idx_batch = np.expand_dims(np.expand_dims(ref_pos_neg_idx_batch, -1), -1)
-        vi_loss = self.model_ven.train_on_batch(X_list, ref_pos_neg_idx_batch)
+
+        if self.args.freeze_rpn :
+            vi_loss = self.model_ven.train_on_batch(shared_feats, ref_pos_neg_idx_batch)
+        else :
+            vi_loss = self.model_ven.train_on_batch(X_list, ref_pos_neg_idx_batch)
+
         loss[2] = vi_loss
 
-        #reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
+        '''
+        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
         #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
 
-        #X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
-        #print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
-        '''
+        X2, Y1, Y2, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
+        print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
         num_pos_samples = num_pos_samples[0]
 
         if X2.shape[1] == self.args.num_rois:
