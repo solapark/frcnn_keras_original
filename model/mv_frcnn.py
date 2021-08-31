@@ -369,12 +369,6 @@ class MV_FRCNN:
         else :
             view_emb = self.model_ven.predict_on_batch(X_list)
 
-        '''
-        all_box_emb = np.squeeze(view_emb)
-        pred_box_emb = all_box_emb[tuple(pred_box_idx_batch[0].T)].transpose((1, 0, 2))
-
-        all_box_emb_batch, pred_box_emb_batch = list(map(lambda a : np.expand_dims(a, 0), [all_box_emb, pred_box_emb]))
-        '''
         all_box_emb_batch, pred_box_emb_batch = self.reid_gt_calculator.get_emb_batch(pred_box_batch, pred_box_idx_batch, view_emb) 
         ref_pos_neg_idx_batch = self.reid_gt_calculator.get_batch(pred_box_batch, pred_box_idx_batch, all_box_emb_batch, Y)
         #self.reid_gt_calculator.draw_anchor_pos_neg(R_list, ref_pos_neg_idx_batch, debug_img) 
