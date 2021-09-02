@@ -177,34 +177,3 @@ class RPN_GT_CALCULATOR:
             cv2.waitKey()
             result_imgs_batch.append(result_imgs)
         return result_imgs_batch
-
-
-if __name__ == '__main__' :
-    random.seed(1)
-    from option import args
-    from dataloader import DATALOADER
-
-    mode = 'train'
-    dl = DATALOADER(args, mode)
-    rpn_gt_calculator = RPN_GT_CALCULATOR(args)
-    imgs_in_batch, labels_in_batch = dl[0]
-    print('labels_in_batch', labels_in_batch)
-    rpn_gt_cls, rpn_gt_regr = rpn_gt_calculator.get_batch(labels_in_batch)
-    print('rpn_gt_cls.shape', rpn_gt_cls.shape, 'rpn_gt_regr.shape', rpn_gt_regr.shape)
-    rpn_gt_calculator.draw_rpn_gt(imgs_in_batch, rpn_gt_cls)
-    '''
-    rpn_gt = [ rpn_gt_cls[:, i//2] if i % 2 == 0 else rpn_gt_regr[:, i//2] for i in range(num_valid_cam*2) ]
-    import pickle
-    with open('/home/sap/frcnn_keras/mv_train_two_XY.pickle', 'rb') as f:
-        XY = pickle.load(f)
-    X, Y = XY
-    for gt, pred in zip(Y, rpn_gt) :
-        if np.array_equal(gt, pred) : print('true')
-        else : 
-            print('false')
-            dismatch_idx = np.where(pred!=gt)
-            print('dismatch_idx\n', np.column_stack(dismatch_idx))
-            print('pred', pred[dismatch_idx])
-            print('gt', gt[dismatch_idx])
-        print('\n')
-    '''

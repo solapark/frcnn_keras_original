@@ -25,12 +25,17 @@ CUDA_VISIBLE_DEVICES='' python -m pdb main.py --mode val_models --dataset MESSYT
 #test messytable 
 CUDA_VISIBLE_DEVICES='' python -m pdb main.py  --mode test --dataset MESSYTABLE --save_dir messytable --input_weight_path /data3/sap/frcnn_keras_original/experiment/messytable/model/model_9.hdf5 --num_valid_cam 3 --test_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar
 
+# train ven from shared feat
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir mv_messytable_reid_only --input_weight_path /data3/sap/frcnn_keras_original/model/messytable_rpn_only.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir rpn_pickle --freeze_classifier
 
-# train reid from shared feat
-CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir mv_messytable_reid_only --input_weight_path /data3/sap/frcnn_keras_original/model/messytable_rpn_only.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir rpn_pickle 
+# train classifier from shared feat
+CUDA_VISIBLE_DEVICES=3 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir mv_messytable_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/model/messytable_rpn_only.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir rpn_pickle --freeze_ven --ven_pickle_dir ven_pickle
 
 # save_rpn_feature
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode save_rpn_feature --dataset MESSYTABLE --save_dir tmp --input_weight_path /data3/sap/frcnn_keras_original/model/messytable_rpn_only.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --rpn_pickle_dir rpn_pickle 
 
-### debug
-CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir tmp --input_weight_path /data3/sap/frcnn_keras_original/experiment/messytable_rpn_reid_only/model/model_99.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn
+# save_ven_feature
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --reset --mode save_ven_feature --dataset MESSYTABLE --save_dir tmp --input_weight_path /data3/sap/frcnn_keras_original/experiment/messytable_rpn_reid_only_alpha6/model/model_248.hdf5 --num_valid_cam 3 --train_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir rpn_pickle --ven_pickle_dir ven_pickle
+
+#messytable demo classifier only
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only/model/model_5.hdf5 --num_valid_cam 3 --demo_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir rpn_pickle --freeze_ven --ven_pickle_dir ven_pickle

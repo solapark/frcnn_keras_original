@@ -25,21 +25,12 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         for idx in range(len(train_dataloader)):
         #for idx in range(10):
             timer_data.tic()
-            extirns = None
-            rpn_results = None
-            if args.is_use_epipolar and args.freeze_rpn :
-                X_raw, Y, extrins, rpn_results = train_dataloader[idx]
-            elif args.is_use_epipolar :
-                X_raw, Y, extrins = train_dataloader[idx]
-            else : 
-                X_raw, Y = train_dataloader[idx]
-            X = img_preprocessor.process_batch(X_raw)
+            images, labels, image_paths, extrins, rpn_results, ven_results = train_dataloader[idx]
+            X = img_preprocessor.process_batch(images)
             timer_data.hold()
 
             timer_model.tic()
-
-            loss, num_calssifier_pos_samples = model.train_batch(X, Y, X_raw, extrins, rpn_results)
-
+            loss, num_calssifier_pos_samples = model.train_batch(X, images, labels, image_paths, extrins, rpn_results, ven_results)
             timer_model.hold()
 
             print('loss', loss) 
@@ -130,31 +121,38 @@ def demo(args, model, log_manager, img_preprocessor, dataloader):
     result_saver = utility.Result_saver(args)
     #model.load(args.input_weight_path)
     for idx in range(len(dataloader)):
-        extrins = None
-        if args.is_use_epipolar :
-            X_raw, Y, img_paths, extrins = dataloader[idx]
-        else : 
-            X_raw, Y, img_paths = dataloader[idx]
-
-        X = img_preprocessor.process_batch(X_raw)
-        #all_dets = []
-        #result_saver.save(X_raw, Y, img_paths, all_dets)
-        all_dets = model.predict_batch(X, extrins, X_raw)
-        result_saver.save(X_raw, Y, img_paths, all_dets)
+        images, labels, image_paths, extrins, rpn_results, ven_results = train_dataloader[idx]
+        X = img_preprocessor.process_batch(images)
+        all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
+        result_saver.save(images, labels, img_paths, all_dets)
         progbar.update(idx+1)
 
 def save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader) :
-    rpn_result_saver = utility.Rpn_result_saver(args)
+    rpn_result_saver = utility.Pickle_result_saver(args, args.rpn_pickle_dir)
     progbar = generic_utils.Progbar(len(dataloader))
 
     for idx in range(len(dataloader)):
-        X_raw, img_paths = dataloader[idx]
+        X_raw, _, img_paths, _, _, _ = dataloader[idx]
         X = img_preprocessor.process_batch(X_raw)
 
         rpn_result = model.rpn_predict_batch(X, X_raw)
 
-        rpn_result_saver.save(img_paths, rpn_result)
+        rpn_result_saver.save(img_paths[0], rpn_result)
         progbar.update(idx+1)
+
+def save_ven_feature(args, model, log_manager, img_preprocessor, dataloader) :
+    ven_result_saver = utility.Pickle_result_saver(args, args.ven_pickle_dir)
+    progbar = generic_utils.Progbar(len(dataloader))
+
+    for idx in range(len(dataloader)):
+        X_raw, _, img_paths, extrins, rpn_results, _ = dataloader[idx]
+        X = img_preprocessor.process_batch(X_raw)
+
+        ven_result = model.ven_predict_batch(X, X_raw, extrins, rpn_results)
+
+        ven_result_saver.save(img_paths[0], ven_result)
+        progbar.update(idx+1)
+
 
 if __name__ == '__main__' :
     model = Model(args)
@@ -178,3 +176,7 @@ if __name__ == '__main__' :
     elif(args.mode == 'save_rpn_feature'):
         dataloader = DATALOADER(args, 'save_rpn_feature', args.train_path)
         save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader)
+
+    elif(args.mode == 'save_ven_feature'):
+        dataloader = DATALOADER(args, 'save_ven_feature', args.train_path)
+        save_ven_feature(args, model, log_manager, img_preprocessor, dataloader)

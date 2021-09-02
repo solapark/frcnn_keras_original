@@ -10,12 +10,15 @@ class CALC_REGR:
 
         tx = (cx_gt - cx_pred) / w_pred
         ty = (cy_gt - cy_pred) / h_pred
-        if((w_gt==0).any()):
-            print('warning')
 
         tw = np.log(w_gt/w_pred)
         th = np.log(h_gt/h_pred)
 
+        tx[np.where(w_pred ==0)] = 0
+        ty[np.where(h_pred ==0)] = 0
+        tw[np.where(w_gt ==0)] = 0
+        th[np.where(h_gt ==0)] = 0
+    
         tx, ty, tw, th = self.std * [tx, ty, tw, th]
 
         return np.column_stack([tx, ty, tw, th])

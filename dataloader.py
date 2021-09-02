@@ -3,9 +3,10 @@ import numpy as np
 import os
 
 from data.image_dataloader import IMAGE_DATALOADER
-from data.label_dataloader import LABEL_DATALOADER
+#from data.label_dataloader import LABEL_DATALOADER
+from data.base_dataloader import BASE_DATALOADER
 from data.extrins_dataloader import EXTRINS_DATALOADER
-from data.rpn_dataloader import RPN_DATALOADER
+from data.pickle_dataloader import PICKLE_DATALOADER
 
 class DATALOADER :
     #def __init__(self, json_path, dataset_name, im_size, mode, batch_size, shuffle):
@@ -38,13 +39,20 @@ class DATALOADER :
 
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
-            if self.args.is_use_epipolar : 
-                extrins_list = self.get_extrins_list(data)
-                self.extrins_dataloader = EXTRINS_DATALOADER(extrins_list, self.batch_size)
-            self.label_dataloader = LABEL_DATALOADER(self.resized_instance_list, self.batch_size)
+            self.label_dataloader = BASE_DATALOADER(self.resized_instance_list, self.batch_size)
+
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+            self.image_path_dataloader = BASE_DATALOADER(self.img_path_list, self.batch_size)
+
+        if self.args.is_use_epipolar : 
+            extrins_list = self.get_extrins_list(data)
+            self.extrins_dataloader = EXTRINS_DATALOADER(extrins_list, self.batch_size)
 
         if self.args.freeze_rpn :
-            self.rpn_dataloader = RPN_DATALOADER(args, self.img_path_list)
+            self.rpn_dataloader = PICKLE_DATALOADER(args, self.img_path_list, args.rpn_pickle_dir)
+
+        if self.args.freeze_ven :
+            self.ven_dataloader = PICKLE_DATALOADER(args, self.img_path_list, args.ven_pickle_dir)
 
         self.indices = np.arange(len(self.image_dataloader))
         self.on_epoch_end()
@@ -96,6 +104,8 @@ class DATALOADER :
                         y1 *= zoom_in_h                
                         y2 *= zoom_in_h                
                         resized_instance_dict[instance_num]['resized_box'][cam_num] = list(map(float, [x1, y1, x2, y2]))
+                if len(resized_instance_dict[instance_num]['resized_box']) == 0 :
+                    resized_instance_dict.pop(instance_num)
 
             resized_instance_list.append(list(resized_instance_dict.values()))
         self.zoom_in_w = zoom_in_w
@@ -106,19 +116,26 @@ class DATALOADER :
         return len(self.image_dataloader)
 
     def __getitem__(self, idx):
-        items = []
-        if self.mode == 'demo':
-            items.append( self.image_dataloader[idx])
-        elif self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models':
-            items.extend( [self.image_dataloader[idx], self.label_dataloader[idx]])
-        elif self.mode == 'save_rpn_feature':
-            items.extend( [self.image_dataloader[idx], self.img_path_list[idx]])
+        images, labels, image_paths, extrins, rpn_results, ven_results = None,None,None,None,None, None
+
+        images = self.image_dataloader[idx]
+
+        if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models':
+            labels = self.label_dataloader[idx]
+
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+            image_paths = self.image_path_dataloader[idx]
 
         if self.args.is_use_epipolar : 
-            items.append(self.extrins_dataloader[idx])
+            extrins = self.extrins_dataloader[idx]
 
         if self.args.freeze_rpn :
-            items.append(self.rpn_dataloader[idx])
+            rpn_results = self.rpn_dataloader[idx]
+
+        if self.args.freeze_ven :
+            ven_results = self.ven_dataloader[idx]
+
+        items = [images, labels, image_paths, extrins, rpn_results, ven_results]
 
         return items
 
@@ -126,10 +143,18 @@ class DATALOADER :
         if(self.shuffle) : 
             np.random.shuffle(self.indices)
         self.image_dataloader.set_indices(self.indices)
+
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
             self.label_dataloader.set_indices(self.indices)
 
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+            self.image_path_dataloader.set_indices(self.indices)
+
         if self.args.is_use_epipolar : 
             self.extrins_dataloader.set_indices(self.indices)
+
         if self.args.freeze_rpn :
             self.rpn_dataloader.set_indices(self.indices)
+
+        if self.args.freeze_ven :
+            self.ven_dataloader.set_indices(self.indices)

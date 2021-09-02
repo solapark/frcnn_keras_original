@@ -44,6 +44,28 @@ def iou(a, b):
 
     return float(area_i) / float(area_u + 1e-6)
 
+def mv_iou(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids):
+    is_neg = False
+    valid_iou_list = []
+    iou_list = []
+    for pred_box, gt_box, pred_is_valid, gt_is_valid in zip(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids):
+        if pred_is_valid :
+            if gt_is_valid  :
+                cur_iou = iou(pred_box, gt_box) 
+                valid_iou_list.append(cur_iou)
+            else :
+                cur_iou = 0
+                is_neg = True
+
+        else :
+            cur_iou = None
+
+        iou_list.append(cur_iou)
+
+    mean_iou = sum(valid_iou_list) / len(valid_iou_list) if len(valid_iou_list) else 0
+    return mean_iou, iou_list, is_neg
+
+'''
 def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
     area_i_list, area_u_list = [], []
     for box_a, box_b, is_valid_a, is_valid_b in zip(boxes_a, boxes_b, is_valids_a, is_valids_b):
@@ -60,6 +82,7 @@ def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
         area_u_list.append(area_u)
 
     return float(sum(area_i_list)) / float(sum(area_u_list) + 1e-6), area_i_list, area_u_list
+'''
 
 def union(au, bu, area_intersection):
     area_a = (au[2] - au[0]) * (au[3] - au[1])
@@ -693,23 +716,25 @@ def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=Tr
     img_min_side = float(args.im_size)
     ratio = img_min_side/height
 
+    result_img_list = [img_list[cam_idx].copy() for cam_idx in range(num_cam)]
+
     for key in sorted(bboxes):
         bbox = np.array(bboxes[key]) #(num_cam, num_box, 4)
         if(is_nms):
             new_boxes_all_cam, new_probs = non_max_suppression_fast_multi_cam(bbox, np.array(probs[key]), overlap_thresh=0.5)
         else : 
             new_boxes_all_cam, new_probs, new_ious_all_cam = bbox, np.array(probs[key]), np.array(ious[key])
+            #new_boxes_all_cam, new_probs = bbox, np.array(probs[key])
         instance_to_color = [np.random.randint(0, 255, 3) for _ in range(len(new_probs))]
+
         for jk in range(new_boxes_all_cam.shape[1]):
             new_boxes = new_boxes_all_cam[:, jk] #(num_cam, 4)
-            new_ious = new_ious_all_cam[jk, :] #(num_cam, )
+            new_ious = new_ious_all_cam[:, jk] #(num_cam, )
             all_dets = []
-            result_img_list = []
             for cam_idx in range(num_cam) : 
-                img = img_list[cam_idx].copy()
+                img = result_img_list[cam_idx]
                 (x1, y1, x2, y2) = new_boxes[cam_idx]
                 if(x1 == -args.rpn_stride) :
-                    result_img_list.append(np.copy(img))
                     continue 
                 # Calculate real coordinates on original image
                 (real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
@@ -718,16 +743,17 @@ def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=Tr
                 cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), color, 4)
                 iou = new_ious[cam_idx]
                 textLabel = '{}: {}, {}'.format(key,int(100*new_probs[jk]), int(100*iou))
+                #textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
                 all_dets.append((key,100*new_probs[jk], iou))
+                #all_dets.append((key,100*new_probs[jk]))
                 (retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
                 textOrg = (real_x1, real_y1)
                 cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 1)
                 cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
                 cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
-            img_list[cam_idx] = img
     print(all_dets)
-    conc_img = get_concat_img(img_list, cols=3)
+    conc_img = get_concat_img(result_img_list, cols=3)
     cv2.imshow('cls_result', conc_img)
     cv2.waitKey()
     '''
@@ -739,7 +765,7 @@ def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=Tr
     plt.show()
     '''
 
-def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
+def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
     #class_mapping = args.num2cls
@@ -747,6 +773,7 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, a
     bboxes = {}
     probs = {}
     is_valids = {}
+    ious = {}
     # Calculate bboxes coordinates on resized image
     for ii in range(P_cls.shape[1]):
         # Ignore 'bg' class
@@ -761,6 +788,7 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, a
         if cls_name not in bboxes:
             bboxes[cls_name] = [[] for _ in range(num_cam)]
             is_valids[cls_name] = [[] for _ in range(num_cam)]
+            ious[cls_name] = [[] for _ in range(num_cam)]
             probs[cls_name] = []
 
         cls_num = np.argmax(P_cls[0, ii, :])
@@ -780,9 +808,12 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_all_cam, a
             except:
                 pass
             bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
-            is_valids[cls_name][cam_idx].append(is_valids_all_cam[0, ii, cam_idx])
+            is_valids[cls_name][cam_idx].append(x != -1)
+
+            iou = iou_list[ii, cam_idx]
+            ious[cls_name][cam_idx].append(iou)
         probs[cls_name].append(np.max(P_cls[0, ii, :]))
-    return bboxes, probs, is_valids 
+    return bboxes, probs, is_valids, ious 
 
 def get_real_coordinates(ratio, x1, y1, x2, y2):
 
@@ -961,10 +992,10 @@ def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
 
     return img
  
-class Rpn_result_saver : 
-    def __init__(self, args):
+class Pickle_result_saver : 
+    def __init__(self, args, pickle_dir):
         self.args = args
-        self.save_dir = os.path.join(args.base_path, args.rpn_pickle_dir)
+        self.save_dir = os.path.join(args.base_path, pickle_dir)
         os.makedirs(self.save_dir, exist_ok=True) 
 
     def save(self, img_paths, rpn_result):

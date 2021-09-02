@@ -6,7 +6,7 @@ from template import get_dataset_info
 parser = argparse.ArgumentParser()
 
 #mode
-parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature'])
+parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature'])
 #parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
@@ -53,7 +53,10 @@ parser.add_argument("--save_dir", help= "save_dir",  default=datetime.datetime.n
 parser.add_argument("--reset", help="reset save_dir", action="store_true", default=False)
 parser.add_argument('--resume', action="store_true", default=False, help='resume from last checkpoint')
 parser.add_argument("--freeze_rpn", action="store_true", default=False)
+parser.add_argument("--freeze_ven", action="store_true", default=False)
+parser.add_argument("--freeze_classifier", action="store_true", default=False)
 parser.add_argument("--rpn_pickle_dir", default='rpn_pickle')
+parser.add_argument("--ven_pickle_dir", default='ven_pickle')
 
 #anchor
 parser.add_argument("--anchor_box_scales", nargs=3, default=[64, 128, 256], help="anchor box scales")
@@ -109,7 +112,7 @@ parser.add_argument('--classifier_num_input_features', type=int, default=512, he
 
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
-parser.add_argument('--classifier_max_overlap', type=float, default=.5, help='threshold for positive sample')
+parser.add_argument('--classifier_max_overlap', type=float, default=.4, help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=.1, help='threshold for negative sample')
 
 args = parser.parse_args()

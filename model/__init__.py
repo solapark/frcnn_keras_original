@@ -44,11 +44,14 @@ class Model :
         print('Saving model to', model_path)
         self.model.save(model_path)
 
-    def rpn_predict_batch(self, X, debug_images=None) :
+    def rpn_predict_batch(self, X, debug_images) :
         return self.model.rpn_predict_batch(X, debug_images)
 
-    def predict_batch(self, X, extrins, debug_imgs):
-        return self.model.predict_batch(X, extrins, debug_imgs) 
+    def ven_predict_batch(self, X, debug_images, extrins, rpn_results) :
+        return self.model.ven_predict_batch(X, debug_images, extrins, rpn_results)
 
-    def train_batch(self, X, Y, debug_img, extrins, rpn_results):
-        return self.model.train_batch(X, Y, debug_img, extrins, rpn_results) 
+    def predict_batch(self, X, images, extrins, rpn_results, ven_results):
+        return self.model.predict_batch(X, images, extrins, rpn_results, ven_results) 
+
+    def train_batch(self, X, images, labels, image_paths, extrins, rpn_results, ven_results):
+        return self.model.train_batch(X, images, labels, image_paths, extrins, rpn_results, ven_results)
