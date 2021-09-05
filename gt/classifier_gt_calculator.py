@@ -57,6 +57,7 @@ class CLASSIFIER_GT_CALCULATOR:
 
         all_gt_boxes, gt_cls, is_gt_box_valid = self.get_gt_insts_box_cls(gt_insts)
         all_gt_boxes = np.around(all_gt_boxes/self.rpn_stride)
+        #all_gt_boxes = all_gt_boxes/self.rpn_stride
         pos_pred_idx, pos_gt_idx, neg_idx = [], [], []
         pos_iou, pos_iou_list, neg_iou, neg_iou_list = [], [], [], []
         for pred_idx, (pred_boxes, is_pred_valid) in enumerate(zip(all_pred_boxes, is_pred_box_valid)):

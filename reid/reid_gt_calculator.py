@@ -114,31 +114,3 @@ class REID_GT_CALCULATOR:
             
             cv2.waitKey(0)
 
-
- 
-if __name__ == '__main__':
-    '''
-    pred_box #(num_cam, 300, 4) (x1, y1, x2, y2)
-    pred_box_idx : CHWA idx #(num_cam, 300, 4) 
-    pred_box_embedding #(num_cam, 300, featsize) 
-    gt_insts #(num_gt_ints, )
-    '''
-
-    import pickle
-    with open('/home/sap/frcnn_keras/mv_train_two_reid_gt.pickle', 'rb') as f:
-        result = pickle.load(f)
-    pred_box, pred_box_idx, all_box_emb, anchor_pos_neg_idx_gt = result
-    
-    from dataloader import DATALOADER
-    from option import args
-    mode = 'train'
-    dl = DATALOADER(args, mode)
-    _, labels_in_batch = dl[0]
-    reid_gt_calculator = REID_GT_CALCULATOR(args)
-
-    pred_box_batch, pred_box_idx_batch, all_box_emb_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_idx, all_box_emb]))
-    ref_pos_neg_idx_batch = reid_gt_calculator.get_batch(pred_box_batch, pred_box_idx_batch, all_box_emb_batch, labels_in_batch)
-
-    print(np.array_equal(ref_pos_neg_idx_batch, anchor_pos_neg_idx_gt))
-    print('gt', anchor_pos_neg_idx_gt)
-    print('pred', ref_pos_neg_idx_batch)

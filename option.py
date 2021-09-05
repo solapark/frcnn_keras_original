@@ -21,12 +21,10 @@ parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
 parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'])
-parser.add_argument("--train_path", help="Path to training data.")
-parser.add_argument("--val_path",  help="Path to val data.")
+parser.add_argument("--dataset_path", help="Path to dataset.")
 parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
 parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
 parser.add_argument("--val_interval", default = 1, type=int, help="intervalof models to be validated")
-parser.add_argument("--demo_path", help="Path to training data.")
 parser.add_argument("--demo_file", default = '', help="Path to demo.")
 parser.add_argument("--parser_type", help="Parser to use. One of simple or pascal_voc", default="simple")
 

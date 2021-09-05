@@ -49,6 +49,11 @@ class MV_FRCNN:
         self.model_all.save_weights(path)
 
     def load(self, path):
+        self.model_rpn.load_weights(path, by_name=True)
+        self.model_ven.load_weights(path, by_name=True)
+        self.model_classifier.load_weights(path, by_name=True)
+
+        '''
         if not self.args.freeze_rpn :
             self.model_rpn.load_weights(path, by_name=True)
 
@@ -57,6 +62,7 @@ class MV_FRCNN:
 
         if not self.args.freeze_classifier :
             self.model_classifier.load_weights(path, by_name=True)
+        '''
 
     def compile(self):
         if self.mode == 'train' :
@@ -114,7 +120,9 @@ class MV_FRCNN:
         model_rpn, model_ven, model_classifier, model_all =  self.make_train_model(args, basenet)
 
         if args.mode != 'train' or args.freeze_rpn :
-            model_rpn, model_ven, model_classifier =  self.make_test_model(args, basenet)
+            model_rpn, model_ven, model_classifier, model_all =  self.make_test_model(args, basenet)
+        else :
+            model_rpn, model_ven, model_classifier, model_all =  self.make_train_model(args, basenet)
 
         return model_rpn, model_ven, model_classifier, model_all
 
@@ -150,10 +158,10 @@ class MV_FRCNN:
         view_invariant_conc = basenet.view_invariant_conc_layer(view_invariants)
         classifier = basenet.classifier_layer(shared_layers, roi_input, args.num_rois, args.classifier_num_input_features, args.num_valid_cam, args.num_cls_with_bg)
 
-        model_rpn = Model(img_input, rpns) if not self.args.freeze_rpn else None
-        model_ven = Model(img_input, view_invariant_conc) if not self.args.freeze_ven else None
+        model_rpn = Model(img_input, rpns)
+        model_ven = Model(img_input, view_invariant_conc)
         classifier_input = img_input + roi_input
-        model_classifier = Model(classifier_input, classifier) if not self.args.freeze_classifier else None
+        model_classifier = Model(classifier_input, classifier) 
 
         model_all = Model(classifier_input, rpns + [view_invariant_conc] + classifier)
 
@@ -198,13 +206,15 @@ class MV_FRCNN:
 
         classifier = basenet.classifier_layer(feature_map_input, roi_input, args.num_rois, args.shared_layer_channels, args.num_valid_cam, nb_classes=args.num_cls_with_bg)
 
-        model_rpn = Model(img_input, rpns) if not self.args.freeze_rpn else None
+        model_rpn = Model(img_input, rpns)
         #model_ven = Model(rpn_body_input, view_invariant_conc)
-        model_ven = Model(feature_map_input, view_invariant_conc) if not self.args.freeze_ven else None
+        model_ven = Model(feature_map_input, view_invariant_conc) 
         classifier_input = feature_map_input + roi_input
-        model_classifier = Model(classifier_input, classifier) if not self.args.freeze_classifier else None
+        model_classifier = Model(classifier_input, classifier) 
 
-        return model_rpn, model_ven, model_classifier
+        model_all = Model(img_input+classifier_input, rpns + [view_invariant_conc] + classifier)
+
+        return model_rpn, model_ven, model_classifier, model_all
 
     def parse_rois(self, rois):
         pred_box_idx = np.array([R[1] for R in rois]) #(num_cam, 300, 3)
@@ -222,6 +232,8 @@ class MV_FRCNN:
 
         else :
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(list(X), X_raw)      
+
+        return pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats
 
     def ven_predict_batch(self, X ,debug_images, extrins, rpn_result):
         pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.extract_rpn_feature(X, debug_images, rpn_result) 
@@ -259,9 +271,15 @@ class MV_FRCNN:
         return reid_box_pred_batch, is_valid_batch, all_box_emb_batch
 
     def classifier_predict_batch(self, F_list, reid_box_pred_batch, is_valid_batch, debug_img):
+        # convert from (x1,y1,x2,y2) to (x,y,w,h)
+        reid_box_pred_batch[:, :, :, 2] -= reid_box_pred_batch[:, :, :, 0]
+        reid_box_pred_batch[:, :, :, 3] -= reid_box_pred_batch[:, :, :, 1]
+
         bboxes = {cls_name : [ [] for _ in range(self.args.num_valid_cam) ] for cls_name in self.args.class_mapping_without_bg.keys()}
         is_valids = {cls_name : [ [] for _ in range(self.args.num_valid_cam) ] for cls_name in self.args.class_mapping_without_bg.keys()}
         probs = {cls_name : [] for cls_name in self.args.class_mapping_without_bg.keys()}
+
+        iou_list = np.zeros((self.args.batch_size, self.args.num_rois, self.args.num_valid_cam))
 
         num_reid_intsts = reid_box_pred_batch.shape[1]
         for jk in range(num_reid_intsts // self.args.num_rois + 1):
@@ -288,7 +306,7 @@ class MV_FRCNN:
 
             [P_cls, P_regr] = self.model_classifier.predict(F_list+ROIs_list)
 
-            cur_bboxes, cur_probs, cur_is_valids = utility.classfier_output_to_box_prob(np.array(ROIs_list), P_cls, P_regr, is_valids_all_cam, self.args, 0, self.args.num_valid_cam, False, is_exclude_bg=True)
+            cur_bboxes, cur_probs, cur_is_valids, _ = utility.classifier_output_to_box_prob(np.array(ROIs_list), P_cls, P_regr, iou_list, self.args, 0, self.args.num_valid_cam, False, is_exclude_bg=True)
 
             for cls_name in cur_bboxes.keys():
                 for cam_idx in range(self.args.num_valid_cam):
@@ -331,7 +349,13 @@ class MV_FRCNN:
         else :
             reid_box_pred_batch, is_valid_batch, all_box_emb_batch = self.extract_ven_feature(shared_feats, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
 
-        all_dets = self.classifier_predict_batch(shared_feats, reid_box_pred_batch, is_valid_batch, debug_img)
+        all_dets = self.classifier_predict_batch(shared_feats, np.copy(reid_box_pred_batch), is_valid_batch, debug_img)
+
+        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+
+        #result_saver = utility.Result_saver(self.args)
+        #image_paths = [{1: '/data1/sap/MessyTable/images/20190921-00001-01-01.jpg', 2: '/data1/sap/MessyTable/images/20190921-00001-01-02.jpg', 3: '/data1/sap/MessyTable/images/20190921-00001-01-03.jpg'}]
+        #result_saver.save(debug_img, image_paths, all_dets)
 
         return all_dets
 

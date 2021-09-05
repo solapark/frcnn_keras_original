@@ -41,7 +41,7 @@ class DATALOADER :
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
             self.label_dataloader = BASE_DATALOADER(self.resized_instance_list, self.batch_size)
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
             self.image_path_dataloader = BASE_DATALOADER(self.img_path_list, self.batch_size)
 
         if self.args.is_use_epipolar : 
@@ -123,7 +123,7 @@ class DATALOADER :
         if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models':
             labels = self.label_dataloader[idx]
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
             image_paths = self.image_path_dataloader[idx]
 
         if self.args.is_use_epipolar : 
@@ -147,7 +147,7 @@ class DATALOADER :
         if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
             self.label_dataloader.set_indices(self.indices)
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature':
+        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
             self.image_path_dataloader.set_indices(self.indices)
 
         if self.args.is_use_epipolar : 

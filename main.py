@@ -23,7 +23,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         log_manager.write_log('[Epoch %d/%d]'%(epoch_num, args.num_epochs))
 
         for idx in range(len(train_dataloader)):
-        #for idx in range(10):
+        #for idx in range(100):
             timer_data.tic()
             images, labels, image_paths, extrins, rpn_results, ven_results = train_dataloader[idx]
             X = img_preprocessor.process_batch(images)
@@ -60,19 +60,13 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     timer_test = utility.timer()
     progbar = generic_utils.Progbar(len(dataloader))
     for idx in range(len(dataloader)):
-    #for idx in range(0, len(dataloader), 4):
-        extirns = None
-        if args.is_use_epipolar :
-            X_raw, Y, extrins = dataloader[idx]
-        else : 
-            X_raw, Y = dataloader[idx]
-        X = img_preprocessor.process_batch(X_raw)
+    #for idx in range(0, 5):
+        images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
+        X = img_preprocessor.process_batch(images)
+        all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
 
-        all_dets = model.predict_batch(X, extrins)
-
-
-        gt_batch = sv_gt_batch_generator.get_gt_batch(Y)
-
+        gt_batch = sv_gt_batch_generator.get_gt_batch(labels)
+ 
         for cam_idx in range(args.num_valid_cam) : 
             dets = all_dets[cam_idx]
             gt = gt_batch[0][cam_idx]
@@ -92,14 +86,9 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
     log_manager.write_log('iou: {:.3f}'.format(iou_avg))
-    log_manager.write_log(
-        'ap : {}\nmAP: {:.3f} (Best: {:.3f} @epoch {})'.format(
-            str(all_ap_dict),
-            cur_map,
-            log_manager.best_map,
-            log_manager.best_map_epoch
-        )
-    )
+    for cls, prob in all_ap_dict.items():
+        log_manager.write_log('%s\t%.4f'%(cls, prob))
+    log_manager.write_log('mAP\t%.4f'%(cur_map))
     log_manager.write_log('Runtime: {:.2f}s\n'.format(timer_test.toc()))
     return cur_map
 
@@ -116,18 +105,18 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
 
-def demo(args, model, log_manager, img_preprocessor, dataloader):
+def demo(args, model, img_preprocessor, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     result_saver = utility.Result_saver(args)
     #model.load(args.input_weight_path)
     for idx in range(len(dataloader)):
-        images, labels, image_paths, extrins, rpn_results, ven_results = train_dataloader[idx]
+        images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
         X = img_preprocessor.process_batch(images)
         all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
-        result_saver.save(images, labels, img_paths, all_dets)
+        result_saver.save(images, image_paths, all_dets)
         progbar.update(idx+1)
 
-def save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader) :
+def save_rpn_feature(args, model, img_preprocessor, dataloader) :
     rpn_result_saver = utility.Pickle_result_saver(args, args.rpn_pickle_dir)
     progbar = generic_utils.Progbar(len(dataloader))
 
@@ -140,7 +129,7 @@ def save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader) :
         rpn_result_saver.save(img_paths[0], rpn_result)
         progbar.update(idx+1)
 
-def save_ven_feature(args, model, log_manager, img_preprocessor, dataloader) :
+def save_ven_feature(args, model, img_preprocessor, dataloader) :
     ven_result_saver = utility.Pickle_result_saver(args, args.ven_pickle_dir)
     progbar = generic_utils.Progbar(len(dataloader))
 
@@ -157,26 +146,28 @@ def save_ven_feature(args, model, log_manager, img_preprocessor, dataloader) :
 if __name__ == '__main__' :
     model = Model(args)
     #model = None
-    utility.file_system(args)
-    log_manager = utility.Log_manager(args)
     img_preprocessor = utility.Img_preprocessor(args)
 
     if(args.mode == 'train'):
-        train_dataloader = DATALOADER(args, 'train', args.train_path)
+        utility.file_system(args)
+        log_manager = utility.Log_manager(args)
+        train_dataloader = DATALOADER(args, 'train', args.dataset_path)
         train(args, model, log_manager, img_preprocessor, train_dataloader, None)
     elif(args.mode == 'val'):
-        val_dataloader = DATALOADER(args, 'val', args.val_path)
+        log_manager = utility.Log_manager(args)
+        val_dataloader = DATALOADER(args, 'val', args.dataset_path)
         calc_map(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'val_models'):
-        val_dataloader = DATALOADER(args, 'val', args.val_path)
+        log_manager = utility.Log_manager(args)
+        val_dataloader = DATALOADER(args, 'val', args.dataset_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'demo'):
-        dataloader = DATALOADER(args, 'demo', args.demo_path)
-        demo(args, model, log_manager, img_preprocessor, dataloader)
+        dataloader = DATALOADER(args, 'demo', args.dataset_path)
+        demo(args, model, img_preprocessor, dataloader)
     elif(args.mode == 'save_rpn_feature'):
-        dataloader = DATALOADER(args, 'save_rpn_feature', args.train_path)
-        save_rpn_feature(args, model, log_manager, img_preprocessor, dataloader)
+        dataloader = DATALOADER(args, 'save_rpn_feature', args.dataset_path)
+        save_rpn_feature(args, model, img_preprocessor, dataloader)
 
     elif(args.mode == 'save_ven_feature'):
-        dataloader = DATALOADER(args, 'save_ven_feature', args.train_path)
-        save_ven_feature(args, model, log_manager, img_preprocessor, dataloader)
+        dataloader = DATALOADER(args, 'save_ven_feature', args.dataset_path)
+        save_ven_feature(args, model, img_preprocessor, dataloader)

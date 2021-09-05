@@ -92,6 +92,7 @@ def class_loss_regr(num_classes, num_cam):
         x_bool = K.cast(K.less_equal(x_abs, 1.0), 'float32')
         #return lambda_cls_regr * K.sum(y_true[:, :, :4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :4*num_classes])
         return lambda_cls_regr * K.sum(y_true[:, :, :num_cam*4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :num_cam*4*num_classes])
+        #return lambda_cls_regr * K.sum(y_true[:, :, :num_cam*4*num_classes] * (x_bool * (0.5 * x * x) + (1 - x_bool) * (x_abs - 0.5))) / K.sum(epsilon + y_true[:, :, :num_cam*4*num_classes]) * 0
     return class_loss_regr_fixed_num
 
 def class_loss_cls(y_true, y_pred):

@@ -22,14 +22,7 @@ class EPIPOLAR :
 
         self.diag = np.sqrt(args.width**2 + args.height**2)
 
-        if args.mode == 'train' or args.mode == 'save_ven_feature':
-            dataset_path = args.train_path
-        elif args.mode == 'val' or args.mode == 'val_models':
-            dataset_path = args.val_path
-        elif args.mode == 'demo':
-            dataset_path = args.demo_path
-            
-        self.intrin = self.parse_intrin(dataset_path) #(num_valid_cam, 3, 3)
+        self.intrin = self.parse_intrin(args.dataset_path) #(num_valid_cam, 3, 3)
 
         self.args = args
 

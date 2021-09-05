@@ -542,6 +542,7 @@ class Map_calculator:
     def get_aps(self):
         all_aps = [average_precision_score(t, p) if t else 0 for t, p in zip(self.all_T.values(), self.all_P.values())]
         all_aps = [ap if not math.isnan(ap) else 0 for ap in all_aps]
+        all_aps = [0 if ap == 1.0 else ap for ap in all_aps]
         self.all_aps = all_aps
         return all_aps
 
@@ -765,6 +766,31 @@ def draw_cls_box_prob(img_list, bboxes, probs, ious, args, num_cam = 1,is_nms=Tr
     plt.show()
     '''
 
+def apply_regr(x, y, w, h, tx, ty, tw, th):
+    try:
+        cx = x + w/2.
+        cy = y + h/2.
+        cx1 = tx * w + cx
+        cy1 = ty * h + cy
+        w1 = math.exp(tw) * w 
+        h1 = math.exp(th) * h 
+        x1 = cx1 - w1/2.
+        y1 = cy1 - h1/2.
+        x1 = int(round(x1))
+        y1 = int(round(y1))
+        w1 = int(round(w1))
+        h1 = int(round(h1))
+
+        return x1, y1, w1, h1
+
+    except ValueError:
+        return x, y, w, h
+    except OverflowError:
+        return x, y, w, h
+    except Exception as e:
+        print(e)
+        return x, y, w, h
+
 def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
@@ -783,15 +809,14 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox
         if np.max(P_cls[0, ii, :]) < bbox_threshold and is_demo :
             continue
 
-        cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
+        cls_num = np.argmax(P_cls[0, ii, :])
+        cls_name = class_mapping[cls_num]
 
         if cls_name not in bboxes:
             bboxes[cls_name] = [[] for _ in range(num_cam)]
             is_valids[cls_name] = [[] for _ in range(num_cam)]
             ious[cls_name] = [[] for _ in range(num_cam)]
             probs[cls_name] = []
-
-        cls_num = np.argmax(P_cls[0, ii, :])
         
         cam_offset = (len(args.class_mapping) - 1) * 4
         for cam_idx in range(num_cam) : 
@@ -810,7 +835,7 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox
             bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
             is_valids[cls_name][cam_idx].append(x != -1)
 
-            iou = iou_list[ii, cam_idx]
+            iou = iou_list[0, ii, cam_idx]
             ious[cls_name][cam_idx].append(iou)
         probs[cls_name].append(np.max(P_cls[0, ii, :]))
     return bboxes, probs, is_valids, ious 
@@ -902,14 +927,16 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0
 
     boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
     is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
+
+    boxes[np.where(boxes<0)] = 0
     # grab the coordinates of the bounding boxes
     x1 = boxes[:, :, 0] #(num_box, num_cam)
     y1 = boxes[:, :, 1]
     x2 = boxes[:, :, 2]
     y2 = boxes[:, :, 3]
 
-    np.testing.assert_array_less(x1, x2)
-    np.testing.assert_array_less(y1, y2)
+    #np.testing.assert_array_less(x1, x2)
+    #np.testing.assert_array_less(y1, y2)
 
     # if the bounding boxes integers, convert them to floats --
     # this is important since we'll be doing a bunch of divisions
@@ -1021,7 +1048,7 @@ class Result_saver :
         os.makedirs(self.result_img_save_dir, exist_ok=True) 
         self.colors = np.random.randint(0, 255, (args.num_nms, 3)).tolist()
 
-    def save(self, X, Y, img_paths, all_dets):
+    def save(self, X, img_paths, all_dets):
         save_path = self.get_general_file_name(img_paths)
         img_list = [x[0] for x in X]
         for cam_idx in range(self.args.num_valid_cam): 
@@ -1030,11 +1057,12 @@ class Result_saver :
                 x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
                 det_color = self.colors[inst_idx]
                 img_list[cam_idx] = draw_inst(img_list[cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
+                #break
         conc_img = get_concat_img(img_list)
         cv2.imwrite(save_path, conc_img)
  
     def get_general_file_name(self, img_paths):
-        base_name = os.path.basename(img_paths[0])
+        base_name = os.path.basename(list(img_paths[0].values())[0])
         if(self.args.dataset == 'MESSYTABLE'):
             general_name = get_value_in_pattern(base_name, '(.*)-0[0-9].jpg')
         general_path = os.path.join(self.result_img_save_dir, general_name+'.jpg')
