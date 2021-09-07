@@ -48,6 +48,12 @@ class MV_FRCNN:
     def save(self, path):
         self.model_all.save_weights(path)
 
+    def load_sv_wgt(self, path):
+        num_rpn_layers = len(self.model_rpn.layers)
+
+        for i in range(self.num_valid_cam, num_rpn_layers) :
+            self.model_rpn.layers[i].load_weights(path, by_name=True)
+
     def load(self, path):
         self.model_rpn.load_weights(path, by_name=True)
         self.model_ven.load_weights(path, by_name=True)
@@ -118,7 +124,6 @@ class MV_FRCNN:
 
     def make_model(self, args, basenet):
         model_rpn, model_ven, model_classifier, model_all =  self.make_train_model(args, basenet)
-
         if args.mode != 'train' or args.freeze_rpn :
             model_rpn, model_ven, model_classifier, model_all =  self.make_test_model(args, basenet)
         else :
@@ -505,10 +510,12 @@ class MV_FRCNN:
 
     def rpn_train_batch(self, X, debug_img, Y):
         rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
-        loss_rpn = self.model_rpn.train_on_batch(X_list, rpn_gt_batch)
+        loss_rpn = self.model_rpn.train_on_batch(list(X), rpn_gt_batch)
         #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
 
-        loss = loss_rpn / self.args.num_valid_cam
+        loss_cls = np.mean(loss_rpn[1::2])
+        loss_regr = np.mean(loss_rpn[2::2])
+        loss = [loss_cls, loss_regr]
         return loss
 
     def train_batch(self, X, debug_img, Y, image_paths, extrins, rpn_result, ven_result):
@@ -519,9 +526,11 @@ class MV_FRCNN:
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result[0]
             inputs = shared_feats 
         else :
-            loss[:2] = self.rpn_train_batch(X, Y)
+            loss[:2] = self.rpn_train_batch(X, debug_img, Y)
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, _ = self.rpn_predict_batch(X, debug_img)
             inputs = list(X)
+
+        #utility.draw_nms(pred_box_batch[0], debug_img, self.args.rpn_stride) 
 
         if self.args.freeze_ven :
             reid_box_pred_batch, is_valid_batch = ven_result[0]
@@ -532,6 +541,12 @@ class MV_FRCNN:
         #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
         if not self.args.freeze_classifier :
             loss[3:5], num_pos_samples = self.classifier_train_batch(inputs, reid_box_pred_batch, is_valid_batch, Y, debug_img)
+
+        #all_dets = self.classifier_predict_batch(inputs, np.copy(reid_box_pred_batch), is_valid_batch, debug_img)
+        #result_saver = utility.Result_saver(self.args)
+        #image_paths = [{1: '/data1/sap/MessyTable/images/20190921-00001-01-01.jpg', 2: '/data1/sap/MessyTable/images/20190921-00001-01-02.jpg', 3: '/data1/sap/MessyTable/images/20190921-00001-01-03.jpg'}]
+        #result_saver.save(debug_img, image_paths, all_dets)
+
 
         loss[-1] = loss[:-1].sum()
 

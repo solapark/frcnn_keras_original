@@ -142,6 +142,18 @@ def save_ven_feature(args, model, img_preprocessor, dataloader) :
         ven_result_saver.save(img_paths[0], ven_result)
         progbar.update(idx+1)
 
+def save_ven_feature(args, model) :
+    self.model.load_sv_wgt()
+    for idx in range(len(dataloader)):
+        X_raw, _, img_paths, extrins, rpn_results, _ = dataloader[idx]
+        X = img_preprocessor.process_batch(X_raw)
+
+        ven_result = model.ven_predict_batch(X, X_raw, extrins, rpn_results)
+
+        ven_result_saver.save(img_paths[0], ven_result)
+        progbar.update(idx+1)
+
+
 
 if __name__ == '__main__' :
     model = Model(args)
@@ -167,7 +179,8 @@ if __name__ == '__main__' :
     elif(args.mode == 'save_rpn_feature'):
         dataloader = DATALOADER(args, 'save_rpn_feature', args.dataset_path)
         save_rpn_feature(args, model, img_preprocessor, dataloader)
-
     elif(args.mode == 'save_ven_feature'):
         dataloader = DATALOADER(args, 'save_ven_feature', args.dataset_path)
         save_ven_feature(args, model, img_preprocessor, dataloader)
+    elif(args.mode == 'save_sv_wgt'):
+        save_sv_wgt(args, model)

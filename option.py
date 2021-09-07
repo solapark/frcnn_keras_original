@@ -6,7 +6,7 @@ from template import get_dataset_info
 parser = argparse.ArgumentParser()
 
 #mode
-parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature'])
+parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature', 'save_sv_wgt'])
 #parser.add_argument('--test_only', action="store_true", default=False)
 
 #model
@@ -44,6 +44,7 @@ parser.add_argument("--print_every", default=10, type=int, help="print every ite
 parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
 parser.add_argument("--epoch_length", type=int, help="iters per epoch")
 parser.add_argument("--input_weight_path", dest="input_weight_path", help="Input path for weights. If not specified, will try to load default weights provided by keras.")
+parser.add_argument("--output_weight_path", help="Ouput path for weights of sv model.")
 parser.add_argument("--model_path", help= "model_base_name",  default="model.hdf5")
 parser.add_argument("--model_load_path", help= "model load path")
 parser.add_argument("--base_path", help= "base path",  default="/data3/sap/frcnn_keras_original")

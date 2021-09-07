@@ -17,6 +17,10 @@ class Model :
 
         self.args = args
 
+    def load_sv_wgt(self, path):
+        self.model.load_sv_wgt(self.args.input_weight_path)
+        self.model.save(self.args.output_weight_path)
+
     def load(self, path=None):
         if(path):
             model_path = path

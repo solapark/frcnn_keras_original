@@ -852,13 +852,17 @@ def get_real_coordinates(ratio, x1, y1, x2, y2):
 def draw_nms(nms_list, debug_img, rpn_stride) : 
     nms_np = np.stack(nms_list, 0) #(num_cam, 300, 4)
     nms_np = nms_np.astype(int)*rpn_stride
+    result_img_list = []
     for cam_idx, nms in enumerate(nms_np) :
         img = np.copy(debug_img[cam_idx]).squeeze()
         window_name = 'nms' + str(cam_idx)
         for box in nms:
             img = draw_box(img, box, window_name, is_show=False)
         img = cv2.resize(img, (320, 180))
-        cv2.imshow(window_name, img)
+        result_img_list.append(img)
+    
+    conc_img = get_concat_img(result_img_list)
+    cv2.imshow('nms', conc_img)
     cv2.waitKey()
  
 def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None):
@@ -868,8 +872,8 @@ def draw_box(image, box, name, color = (0, 255, 0), is_show = True, text = None)
     if text:
         cv2.putText(image, text, (x1+10, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 2, color, 2)
         
-    image = cv2.resize(image, (320, 180))
     if is_show :
+        image = cv2.resize(image, (320, 180))
         cv2.imshow(name, image)
     return image
 
@@ -981,7 +985,8 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0
         idxs = np.delete(idxs, np.concatenate(([last],
             #np.where(np.all(overlap > overlap_thresh, 1))[0])))
             #np.where(np.any(overlap > overlap_thresh, 1))[0])))
-            np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
+            #np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
+            np.where(np.sum(overlap > overlap_thresh, 1) > 0)[0])))
 
         if len(pick) >= max_boxes:
             break
