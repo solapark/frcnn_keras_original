@@ -263,9 +263,13 @@ class MV_FRCNN:
         #utility.draw_nms(pred_box_batch[0], debug_img, self.args.rpn_stride) 
         return pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats
 
-    def extract_ven_feature(self, inputs, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch):
+    def predict_ven_batch(self, inputs, pred_box_idx_batch, pred_box_batch):
         view_emb = self.model_ven.predict_on_batch(inputs)
         all_box_emb_batch, pred_box_emb_batch = self.reid_gt_calculator.get_emb_batch(pred_box_batch, pred_box_idx_batch, view_emb) 
+        return all_box_emb_batch, pred_box_emb_batch
+
+    def extract_ven_feature(self, inputs, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch):
+        all_box_emb_batch, pred_box_emb_batch = self.predict_ven_batch(inputs, pred_box_idx_batch, pred_box_batch)
 
         reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
 
@@ -528,14 +532,19 @@ class MV_FRCNN:
 
         #utility.draw_nms(pred_box_batch[0], debug_img, self.args.rpn_stride) 
 
-        if self.args.freeze_ven :
-            reid_box_pred_batch, is_valid_batch = ven_result[0]
-        else :
-            reid_box_pred_batch, is_valid_batch, all_box_emb_batch = self.extract_ven_feature(inputs, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
+        if not self.args.freeze_ven :
+            all_box_emb_batch, pred_box_emb_batch =  self.predict_ven_batch(inputs, pred_box_idx_batch, pred_box_batch)
             loss[2] = self.ven_train_batch(inputs, pred_box_batch, pred_box_idx_batch, all_box_emb_batch, Y, debug_img)
 
-        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+            if not self.args.freeze_classifier :
+                reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
+                #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+
         if not self.args.freeze_classifier :
+            if self.args.freeze_ven :
+                reid_box_pred_batch, is_valid_batch = ven_result[0]
+                #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)
+
             loss[3:5], num_pos_samples = self.classifier_train_batch(inputs, reid_box_pred_batch, is_valid_batch, Y, debug_img)
 
         #all_dets = self.classifier_predict_batch(inputs, np.copy(reid_box_pred_batch), is_valid_batch, debug_img)
