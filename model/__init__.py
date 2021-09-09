@@ -8,7 +8,7 @@ class Model :
         module = import_module('model.' + args.model.lower())
         self.model = module.make_model(args)
         #print(self.model.summary())
-        if args.input_weight_path :
+        if args.input_weight_path and args.mode != 'save_sv_wgt':
             self.load(args.input_weight_path)
         self.apath = os.path.join(args.base_path, 'experiment/model')
 
@@ -18,8 +18,7 @@ class Model :
         self.args = args
 
     def load_sv_wgt(self, path):
-        self.model.load_sv_wgt(self.args.input_weight_path)
-        self.model.save(self.args.output_weight_path)
+        self.model.load_sv_wgt(path)
 
     def load(self, path=None):
         if(path):

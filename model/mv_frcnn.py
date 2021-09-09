@@ -49,10 +49,8 @@ class MV_FRCNN:
         self.model_all.save_weights(path)
 
     def load_sv_wgt(self, path):
-        num_rpn_layers = len(self.model_rpn.layers)
-
-        for i in range(self.num_valid_cam, num_rpn_layers) :
-            self.model_rpn.layers[i].load_weights(path, by_name=True)
+        for layer in self.model_rpn.layers[self.args.num_valid_cam:] :
+            layer.load_weights(path, by_name=True)
 
     def load(self, path):
         self.model_rpn.load_weights(path, by_name=True)
@@ -240,14 +238,14 @@ class MV_FRCNN:
 
         return pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats
 
-    def ven_predict_batch(self, X ,debug_images, extrins, rpn_result):
-        pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.extract_rpn_feature(X, debug_images, rpn_result) 
+    def ven_predict_batch(self, X ,debug_img, extrins, rpn_result):
+        pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.extract_rpn_feature(X, debug_img, rpn_result) 
 
-        reid_box_pred_batch, is_valid_batch, _ = self.extract_ven_feature(shared_feats, debug_images, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
+        reid_box_pred_batch, is_valid_batch, _ = self.extract_ven_feature(shared_feats, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
 
         return reid_box_pred_batch, is_valid_batch
 
-    def rpn_predict_batch(self, X, debug_images=None):
+    def rpn_predict_batch(self, X, debug_img=None):
         offset = 2 if self.args.mode == 'train' else 4
 
         P_rpn = self.model_rpn.predict_on_batch(list(X))
@@ -260,18 +258,16 @@ class MV_FRCNN:
         pred_box_batch = self.to_batch(pred_box)
         pred_box_prob_batch = self.to_batch(pred_box_prob)
 
-        #nms_list = [R[2] for R in rois]
-        #utility.draw_nms(nms_list, debug_img, self.args.rpn_stride) 
-
         shared_feats = None if self.args.mode == 'train' else [P_rpn[i*offset+2] for i in range(self.args.num_valid_cam)]
 
+        #utility.draw_nms(pred_box_batch[0], debug_img, self.args.rpn_stride) 
         return pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats
 
-    def extract_ven_feature(self, inputs, debug_images, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch):
+    def extract_ven_feature(self, inputs, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch):
         view_emb = self.model_ven.predict_on_batch(inputs)
         all_box_emb_batch, pred_box_emb_batch = self.reid_gt_calculator.get_emb_batch(pred_box_batch, pred_box_idx_batch, view_emb) 
 
-        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_images).transpose(1, 0, 2, 3, 4))
+        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
 
         return reid_box_pred_batch, is_valid_batch, all_box_emb_batch
 
@@ -327,7 +323,7 @@ class MV_FRCNN:
             if not cur_bboxes.size : continue
             cur_probs = np.array(probs[key])
             cur_is_valids = np.array(is_valids[key])
-            new_boxes_all_cam, new_probs, new_is_valids_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, overlap_thresh=0.5)
+            new_boxes_all_cam, new_probs, new_is_valids_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, overlap_thresh=self.args.classifier_nms_thresh)
             for jk in range(new_boxes_all_cam.shape[1]):
                 for cam_idx in range(self.args.num_valid_cam) : 
                     (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
@@ -408,9 +404,9 @@ class MV_FRCNN:
         """
 
         '''
-        #pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_images)
+        #pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_img)
 
-        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_images).transpose(1, 0, 2, 3, 4)) #(B, 300, cam, 4), (B, 300, 3)
+        reid_box_pred_batch, is_valid_batch = self.reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4)) #(B, 300, cam, 4), (B, 300, 3)
 
         # convert from (x1,y1,x2,y2) to (x,y,w,h)
         reid_box_pred_batch[:, :, :, 2] -= reid_box_pred_batch[:, :, :, 0]

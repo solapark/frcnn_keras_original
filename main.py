@@ -58,9 +58,11 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     map_calculator = utility.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     timer_test = utility.timer()
-    progbar = generic_utils.Progbar(len(dataloader))
-    for idx in range(len(dataloader)):
-    #for idx in range(0, 5):
+
+    dataset_interval = 18 if args.fast_val else 1
+    dataset_size = len(dataloader) // dataset_interval
+    progbar = generic_utils.Progbar(dataset_size)
+    for idx in range(0, len(dataloader), dataset_interval):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
         X = img_preprocessor.process_batch(images)
         all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
@@ -72,7 +74,7 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
             gt = gt_batch[0][cam_idx]
             map_calculator.add_img_tp(dets, gt) 
 
-        progbar.update(idx+1)
+        progbar.update(idx/dataset_interval+1)
     
     all_aps = map_calculator.get_aps()
     iou_avg = map_calculator.get_iou()
@@ -142,18 +144,9 @@ def save_ven_feature(args, model, img_preprocessor, dataloader) :
         ven_result_saver.save(img_paths[0], ven_result)
         progbar.update(idx+1)
 
-def save_ven_feature(args, model) :
-    self.model.load_sv_wgt()
-    for idx in range(len(dataloader)):
-        X_raw, _, img_paths, extrins, rpn_results, _ = dataloader[idx]
-        X = img_preprocessor.process_batch(X_raw)
-
-        ven_result = model.ven_predict_batch(X, X_raw, extrins, rpn_results)
-
-        ven_result_saver.save(img_paths[0], ven_result)
-        progbar.update(idx+1)
-
-
+def save_sv_wgt(args, model):
+    model.load_sv_wgt(args.input_weight_path)
+    model.save(args.output_weight_path)
 
 if __name__ == '__main__' :
     model = Model(args)
