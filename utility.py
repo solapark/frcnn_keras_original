@@ -63,7 +63,7 @@ def mv_iou(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids):
         iou_list.append(cur_iou)
 
     mean_iou = sum(valid_iou_list) / len(valid_iou_list) if len(valid_iou_list) else 0
-    return mean_iou, iou_list, is_neg
+    return mean_iou, iou_list, valid_iou_list, is_neg
 
 '''
 def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
@@ -997,20 +997,30 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0
     probs = probs[pick]
     return boxes, probs, is_valids
 
-def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride) : 
+def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch, pos_neg_result_batch) : 
     boxes_list = boxes_batch[0].astype(int)*rpn_stride  #(300, num_cam, 4)
     is_valids_list = is_valid_batch[0] #(300, num_cam)
+    iou_list = iou_list_batch[0] #(300, num_cam)
+    pos_neg_result_list = pos_neg_result_batch[0] #(300, num_cam)
 
     boxes_list = boxes_list[::-1]
     is_valids_list = is_valids_list[::-1]
-    for boxes, is_valids in zip(boxes_list, is_valids_list) :
+    iou_list = iou_list[::-1]
+    pos_neg_result_list = pos_neg_result_list[::-1]
+    for boxes, is_valids, ious, pos_neg_result in zip(boxes_list, is_valids_list, iou_list, pos_neg_result_list) :
         img_list = []
-        for cam_idx, (box, is_valid)  in enumerate(zip(boxes, is_valids)):
+        for cam_idx, (box, is_valid, iou)  in enumerate(zip(boxes, is_valids, ious)):
             color = (0, 0, 255) if is_valid  else (0, 0, 0) 
             window_name = 'reid' + str(cam_idx)
-            img = draw_box(np.copy(debug_img[cam_idx]), box, window_name, color, is_show=False, text=str(int(is_valid)))
+            text =str(int(is_valid))
+            text += '_'+str(int((iou*100))) if iou is not None else ''
+
+            img = draw_box(np.copy(debug_img[cam_idx]), box, window_name, color, is_show=False, text=text)
             img_list.append(cv2.resize(img, (480, 240)))
         conc_img = get_concat_img(img_list)
+        textOrg = (20, 20)
+        cv2.putText(conc_img, pos_neg_result, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+
         cv2.imshow('reid_result', conc_img)
         cv2.waitKey(0)
 

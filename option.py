@@ -113,7 +113,7 @@ parser.add_argument('--classifier_nms_thresh', type=float, default=.5)
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
 parser.add_argument('--classifier_max_overlap', type=float, default=.4, help='threshold for positive sample')
-parser.add_argument('--classifier_min_overlap', type=float, default=.1, help='threshold for negative sample')
+parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='threshold for negative sample')
 
 args = parser.parse_args()
 

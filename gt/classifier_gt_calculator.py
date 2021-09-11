@@ -28,15 +28,19 @@ class CLASSIFIER_GT_CALCULATOR:
         self.args = args
  
     def get_batch(self, *args):
-        X_box_batch, Y_cls_batch, Y_regr_batch, num_neg_batch, num_pos_batch = [], [], [], [], []
+        X_box_batch, Y_cls_batch, Y_regr_batch, ious_list_batch, num_neg_batch, num_pos_batch, pos_neg_result_batch = [], [], [], [], [], [], []
         for args_one_batch in zip(*args) :
-            X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos = self.calc_classifier_gt(*args_one_batch)
+            #X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos = self.calc_classifier_gt(*args_one_batch)pos_neg_result
+            X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos, pos_neg_result  = self.calc_classifier_gt(*args_one_batch)
             X_box_batch.append(X_box)
             Y_cls_batch.append(Y_cls)
             Y_regr_batch.append(Y_regr)
+            ious_list_batch.append(ious_list)
             num_neg_batch.append(num_neg)
             num_pos_batch.append(num_pos)
-        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list), np.array(num_neg_batch), np.array(num_pos_batch) 
+            pos_neg_result_batch.append(pos_neg_result)
+        #return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list), np.array(num_neg_batch), np.array(num_pos_batch) 
+        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list_batch), np.array(num_neg_batch), np.array(num_pos_batch), np.array(pos_neg_result_batch)
        
     def get_gt_insts_box_cls(self, gt_insts):
         num_inst = len(gt_insts)
@@ -60,17 +64,21 @@ class CLASSIFIER_GT_CALCULATOR:
         #all_gt_boxes = all_gt_boxes/self.rpn_stride
         pos_pred_idx, pos_gt_idx, neg_idx = [], [], []
         pos_iou, pos_iou_list, neg_iou, neg_iou_list = [], [], [], []
+        pos_neg_result = []
+        all_iou_list = []
         for pred_idx, (pred_boxes, is_pred_valid) in enumerate(zip(all_pred_boxes, is_pred_box_valid)):
             best_iou = 0.0 
             best_iou_list = None
+            best_valid_iou_list = None
             best_gt_idx = -1
             best_is_neg = False
             for gt_idx, (gt_boxes, is_gt_valid) in enumerate(zip(all_gt_boxes, is_gt_box_valid)):
-                cur_iou, iou_list, is_neg = utility.mv_iou(pred_boxes, gt_boxes, is_pred_valid, is_gt_valid)
+                cur_iou, iou_list, valid_iou_list, is_neg = utility.mv_iou(pred_boxes, gt_boxes, is_pred_valid, is_gt_valid)
 
                 if cur_iou > best_iou : 
                     best_iou = cur_iou 
                     best_iou_list = iou_list
+                    best_valid_iou_list = valid_iou_list
                     best_gt_idx = gt_idx
                     best_is_neg = is_neg
 
@@ -79,11 +87,17 @@ class CLASSIFIER_GT_CALCULATOR:
                     neg_idx.append(pred_idx)
                     neg_iou.append(best_iou)
                     neg_iou_list.append(best_iou_list)
+                    pos_neg_result.append('neg')
                 else :
                     pos_pred_idx.append(pred_idx)
                     pos_gt_idx.append(best_gt_idx)
                     pos_iou.append(best_iou)
                     pos_iou_list.append(best_iou_list)
+                    pos_neg_result.append('pos')
+
+            else :
+                    pos_neg_result.append('ignore')
+            all_iou_list.append(best_iou_list)
 
         pos_pred_idx, pos_gt_idx = np.array(pos_pred_idx, dtype='int'), np.array(pos_gt_idx, dtype='int')
         pos_iou, pos_iou_list = np.array(pos_iou), np.array(pos_iou_list)
@@ -142,7 +156,10 @@ class CLASSIFIER_GT_CALCULATOR:
 
         random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list = self.get_random_samples(X_box, Y_cls, Y_regr, iou, iou_list, num_neg, num_pos)
 
-        return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos
+        #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos
+        #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos, pos_neg_result
+        return random_X_box, random_Y_cls, random_Y_regr, random_iou, all_iou_list, num_neg, num_pos, pos_neg_result
+
 
     def get_random_samples(self, X2, Y1, Y2, iou, iou_list, num_neg, num_pos):
         neg_samples = np.arange(0, num_neg)

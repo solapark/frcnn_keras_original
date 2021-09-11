@@ -492,9 +492,10 @@ class MV_FRCNN:
         return vi_loss
 
     def classifier_train_batch(self, inputs, reid_box_pred_batch, is_valid_batch, Y, debug_img):
-        X2, Y1, Y2, iou, iou_list, num_neg_samples, num_pos_samples = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
+        X2, Y1, Y2, iou, iou_list, num_neg_samples, num_pos_samples, pos_neg_result = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
         loss = np.zeros((2, ))
 
+        #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride, iou_list, pos_neg_result)
         if X2.shape[1] == self.args.num_rois:
             X2_list = list(X2.transpose(2, 0, 1, 3))
             loss = self.model_classifier.train_on_batch(inputs+X2_list, [Y1, Y2])
