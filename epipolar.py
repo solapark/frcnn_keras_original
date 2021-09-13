@@ -39,6 +39,12 @@ class EPIPOLAR :
         self.calc_epipole()
         self.debug_imgs = debug_imgs
 
+    def original_pnt_to_resized_pnt(self, pnt):
+        x, y = pnt
+        x /= self.zoom_out_w
+        y /= self.zoom_out_h
+        return np.array([x, y])
+
     def resized_box_to_original_box(self, bbox_list):
         x1 = bbox_list[:, 0] * self.zoom_out_w
         y1 = bbox_list[:, 1] * self.zoom_out_h
@@ -172,13 +178,18 @@ class EPIPOLAR :
 
         return a, b, c
 
+    def check_cross_pnt_valid(self, cross_pnt):
+        pass
+
     def get_box_idx_on_cross_line(self, line1, line2, boxes) : 
         cross_pnt = self.solve_system_of_equations(line1, line2)
+        #if not self.check_cross_pnt_valid(cross_pnt):
+        #    return [], [], [-1]
         boxes = self.resized_box_to_original_box(boxes)
         boxes_centers = self.get_boxes_centers(boxes)
         dist = self.find_dist_pnt2pnts(cross_pnt, boxes_centers) / self.diag
         valid_idx = np.where(dist < self.max_dist_epiline_cross_to_box)
-        return valid_idx
+        return valid_idx, dist, cross_pnt
 
     def draw_boxes_with_epiline(self, ref_cam_idx, ref_box, target_cam_idx, epipolar_line, boxes) :
         boxes = self.resized_box_to_original_box(boxes)

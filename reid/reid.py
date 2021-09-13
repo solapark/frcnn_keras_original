@@ -1,12 +1,13 @@
 import numpy as np
 import os, sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-from utility import calc_emb_dist, get_min_emb_dist_idx, draw_box, get_concat_img
+import utility
 import cv2
 from epipolar import EPIPOLAR
 
 class REID:
     def __init__(self, args):
+        self.args = args
         self.num_cam = args.num_cam
         self.num_nms = args.num_nms
         self.batch_size = args.batch_size
@@ -42,14 +43,16 @@ class REID:
         return np.array(ref_cam_idx_batch)
  
     def get_batch(self, *args):
-        reid_box_pred_batch, is_valid_batch = [], []
+        reid_box_pred_batch, is_valid_batch  = [], []
         for args_one_batch in zip(*args) :
             if self.is_use_epipolar :
                 reid_box_pred, is_valid = self.get_reid_box_epi_const(*args_one_batch)
+
             else :
                 reid_box_pred, is_valid = self.get_reid_box(*args_one_batch)
             reid_box_pred_batch.append(reid_box_pred)
             is_valid_batch.append(is_valid)
+
         return np.array(reid_box_pred_batch), np.array(is_valid_batch)
 
     def get_reid_box_epi_const(self, pred_box, pred_box_emb, pred_box_prob, extrins, debug_imgs = None):
@@ -66,6 +69,8 @@ class REID:
 
         reid_box = -np.ones((self.num_nms, self.num_cam, 4))
         is_valid = np.zeros((self.num_nms, self.num_cam), dtype='uint8')
+        fail_boxes = np.empty((self.num_nms, self.num_cam), dtype=object)
+        fail_dists = np.empty((self.num_nms, self.num_cam), dtype=object)
 
         ref_cam_idx_list, ref_box_list, ref_emb_list = self.get_ref(pred_box_prob, pred_box, pred_box_emb)
         
@@ -94,7 +99,7 @@ class REID:
                 if not epi_boxes.size : 
                     continue
 
-                min_dist_idx, min_dist = get_min_emb_dist_idx(ref_emb, epi_embs, is_want_dist=True)
+                min_dist_idx, min_dist = utility.get_min_emb_dist_idx(ref_emb, epi_embs, is_want_dist=True)
 
                 #if min_dist < self.reid_min_emb_dist and min_dist < match_box_emb_dist :
                 if min_dist < match_box_emb_dist :
@@ -125,20 +130,26 @@ class REID:
                 ref_epipolar_line = epipolar_lines[target_cam_idx]
                 match_epipolar_line = self.epipolar.get_epipolar_line(match_box_cam_idx, match_box, target_cam_idx)
 
-                valid_idx = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
+                valid_idx, dist, cross_pnt = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
 
-                if not valid_idx[0].any():
+                if not valid_idx[0].size:
+                #if not valid_idx[0].any():
+                    #fail_boxes[i, target_cam_idx] = target_boxes
+                    #fail_dists[i, target_cam_idx] = dist
+                    #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
                     continue
 
                 valid_boxes = target_boxes[valid_idx]
                 valid_embs = target_embs[valid_idx]
 
-                min_dist_idx, min_dist = get_min_emb_dist_idx(ref_emb, valid_embs, is_want_dist=True)
+                min_dist_idx, min_dist = utility.get_min_emb_dist_idx(ref_emb, valid_embs, is_want_dist=True)
 
                 cross_box = valid_boxes[min_dist_idx]
 
                 reid_box[i, target_cam_idx] = cross_box
                 is_valid[i, target_cam_idx] = 3 
+
+                #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
 
         return reid_box, is_valid
 
@@ -162,7 +173,7 @@ class REID:
             target_cam_idx = (ref_cam_idx + offset) % self.num_cam
             cand_emb = pred_box_emb[target_cam_idx]
             cand_box = pred_box[target_cam_idx]
-            min_dist_idx, min_dist = get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True)
+            min_dist_idx, min_dist = utility.get_min_emb_dist_idx(ref_emb, cand_emb, is_want_dist=True)
             reid_box[self.num_nms_arange, target_cam_idx] = pred_box[target_cam_idx, min_dist_idx]
 
             invalid_idx = np.where(min_dist < self.reid_min_emb_dist)
@@ -187,38 +198,39 @@ class REID:
                     box = boxes[cam_idx] 
                     is_valid = is_valids[cam_idx]
                     color = (0, 0, 255) if (cam_idx == ref_cam_idx) else (0, 255, 0) 
-                    img_list[cam_idx] = draw_box(img_list[cam_idx], box, color)
-            concat_img = get_concat_img(img_list)
+                    img_list[cam_idx] = utility.draw_box(img_list[cam_idx], box, color)
+            concat_img = utility.get_concat_img(img_list)
             cv2.imshow('reid', concat_img)
             cv2.waitKey(waitKey)
 
-if __name__ == '__main__':
-    from option import args
-    import pickle
-    with open('/home/sap/frcnn_keras/mv_train_two_reid.pickle', 'rb') as f:
-        reid_pickle = pickle.load(f)
-    pred_box, pred_box_emb, pred_box_prob, reid_box_gt = reid_pickle
-    
-    reid = REID(args)
-    reid_box_pred, is_valid = reid.get_reid_box(pred_box, pred_box_emb, pred_box_prob)
-    print('reid_box_pred.shape', reid_box_pred.shape, 'is_valid', is_valid.shape)
-    pred_box_batch, pred_box_emb_batch, pred_box_prob_batch = list(map(lambda a : np.expand_dims(a, 0), [pred_box, pred_box_emb, pred_box_prob]))
-    reid_box_pred_batch, is_valid_batch = reid.get_batch(pred_box_batch, pred_box_emb_batch, pred_box_prob_batch)
-    print('reid_box_pred_batch.shape', reid_box_pred_batch.shape, 'is_valid_batch', is_valid_batch.shape)
-    print(np.array_equal(reid_box_pred_batch[0], reid_box_pred), np.array_equal(is_valid_batch[0], is_valid))
 
-    '''
-    is_valid = np.ones((self.num_nms, self.num_cam))
-    with open('/home/sap/frcnn_keras/pred_box_is_valid.pickle', 'wb') as f:
-        pickle.dump(is_valid, f)
+    def draw_reid(self, imgs, boxes, is_valids, fail_boxes, fail_dists, cross_pnt):
+        img_list = []
+        boxes = boxes.astype('int')*self.args.rpn_stride
+        for cam_idx, (box, is_valid, fail_box_list, fail_dist_list)  in enumerate(zip(boxes, is_valids, fail_boxes, fail_dists)):
+            color = (0, 0, 255)
+            img = np.copy(imgs[cam_idx])
 
-    for i in range(10) :
-        print('gt', reid_box_gt[i])
-        print('pred', reid_box_pred[i])
-        print('valid', is_valid[i])
+            if is_valid :
+                text =str(int(is_valid))
+                img = utility.draw_box(img, box, '', color, is_show=False, text=text)
 
-    if(np.array_equal(reid_box_gt, reid_box_pred)) :
-        print('good')
-    else :
-        print('bad')
-    '''
+            else :
+                fail_box_list = np.array(fail_box_list, dtype='int')*self.args.rpn_stride
+                cross_pnt = self.epipolar.original_pnt_to_resized_pnt(cross_pnt) * self.args.rpn_stride
+                cross_pnt = tuple(cross_pnt.astype('int')) 
+                for fail_b, fail_d, in zip(fail_box_list, fail_dist_list):
+                    text = str(round(fail_d, 3))
+                    img = utility.draw_box(img, fail_b, '', color, is_show=False, text=text)
+                    img = utility.draw_circle(img, cross_pnt, 10, (255, 0, 0), -1)
+                print('cross_pnt', cross_pnt)
+                print('fail_box_list', fail_box_list)
+                print('fail_dist_list', fail_dist_list)
+
+            img_list.append(img)
+
+        print('is_valids', is_valids)
+        print('\n')
+        conc_img = utility.get_concat_img(img_list)
+        cv2.imshow('reid_result', conc_img)
+        cv2.waitKey(0)

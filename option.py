@@ -108,7 +108,7 @@ parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minim
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
 parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
-parser.add_argument('--classifier_nms_thresh', type=float, default=.5)
+parser.add_argument('--classifier_nms_thresh', type=float, default=.3)
 
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')

@@ -17,6 +17,12 @@ from gt.classifier_gt_calculator import CLASSIFIER_GT_CALCULATOR
 import utility
 import tmp
 
+import tensorflow as tf
+from keras.backend.tensorflow_backend import set_session
+config = tf.ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
+set_session(tf.Session(config=config))
+
 def make_model(args):
     return MV_FRCNN(args)
 

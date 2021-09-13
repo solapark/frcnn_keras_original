@@ -892,6 +892,10 @@ def calc_emb_dist(embs1, embs2) :
     '''
     return np.sqrt(np.sum(np.square(embs1 - embs2), -1)) 
 
+def draw_circle(img, org, radius, color, thickness): 
+    img = cv2.circle(img, org, radius, color, thickness)
+    return img
+
 def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0): 
     '''
     Args :
