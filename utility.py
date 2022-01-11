@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import average_precision_score
 
 from gt import data_generators
+from script import json_maker
 
 def make_save_dir(base_dir, save_dir, reset):
     save_path = os.path.join(base_dir, 'experiment', save_dir)
@@ -238,7 +239,7 @@ class Log_manager:
                 self.num_calssifier_pos_samples_every_epoch.load(self.get_path('num_calssifier_pos_samples.npy'))
                 print('Continue from epoch {}...'.format(len(self.loss_every_epoch.get_data())))
 
-        if args.mode in ['val', 'val_models'] :
+        if args.mode in ['val', 'val_models', 'val_json_json'] :
             self.ap_names = args.class_list
             self.ap = Data_to_monitor('ap', self.ap_names[:-1])
             self.map = Data_to_monitor('map', ['map'])
@@ -500,7 +501,7 @@ def get_new_img_size(width, height, img_min_side):
         f = float(img_min_side) / height
         resized_width = int(f * width)
         resized_height = img_min_side
-    return resized_width, resized_height
+    return resized_width, resized_height, f
 
 class Map_calculator:
     #def __init__(self, args, fx, fy):
@@ -691,7 +692,7 @@ class CALC_REGR:
         tw = np.log(w_gt/w_pred)
         th = np.log(h_gt/h_pred)
 
-        tx, ty, tw, th = self.std * [tx, ty, tw, th]
+        #tx, ty, tw, th = self.std * [tx, ty, tw, th]
 
         return np.column_stack([tx, ty, tw, th])
 
@@ -704,7 +705,7 @@ def pickle_load(path) :
     return pickle.load(f)
    
 def file_system(args):
-    if args.reset and args.mode == 'train' :
+    if args.reset and (args.mode == 'train' or args.mode == 'val_json_json') :
         save_path = os.path.join(args.base_dir, 'experiment', args.save_dir)
         model_path = os.path.join(save_path, 'model')
 
@@ -1092,3 +1093,76 @@ def get_value_in_pattern(text, pattern):
     #text = 'aaa_b'
     #return = ['b']
     return re.findall(pattern, text)[0]
+
+#def labels_to_draw_format(labels, num_cam, num2cls_with_bg, resize_ratio):
+def labels_to_draw_format(labels, num_cam, num2cls_with_bg):
+    # labels 
+        #size : (batch_size, num_inst)
+        #{cls : , resized_box : {cam_idx : [x1, y1, x2, y2], cam_idx : [x1, y1, x2, y2], ...}
+    # all_dets 
+        #size : (num_cam)
+        #[ {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 1}, {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 2}, ...]
+
+    src = labels[0]
+    dst = [[] for _ in range(num_cam)]
+
+    for i, inst in enumerate(src) :
+        cls = num2cls_with_bg[inst['cls']+1]
+        #cls = num2cls_with_bg[inst['cls']]
+        if cls == 'bg' :
+            continue
+
+        boxes_all_cam = inst['resized_box']
+        probs_all_cam = inst['prob']
+        for cam_idx, box in boxes_all_cam.items() :
+            x1, y1, x2, y2 = list(map(int, box))
+            #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
+            prob = probs_all_cam[cam_idx]
+            dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':i})
+
+    return dst
+'''
+    all_dets = [[{'x1': 512, 'x2': 592, 'y1': 176, 'y2': 368, 'class': 'water1', 'prob': 0.9963981, 'inst_idx': 1}, {'x1': 656, 'x2': 720, 'y1': 176, 'y2': 352, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 336, 'x2': 528, 'y1': 224, 'y2': 272, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 432, 'x2': 496, 'y1': 304, 'y2': 416, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 752, 'x2': 832, 'y1': 256, 'y2': 352, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 432, 'x2': 496, 'y1': 304, 'y2': 400, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 336, 'x2': 496, 'y1': 224, 'y2': 288, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 336, 'x2': 496, 'y1': 224, 'y2': 288, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 576, 'x2': 672, 'y1': 96, 'y2': 176, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 576, 'x2': 640, 'y1': 416, 'y2': 480, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 688, 'x2': 768, 'y1': 400, 'y2': 464, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}], [{'x1': 336, 'x2': 448, 'y1': 64, 'y2': 224, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 16, 'x2': 160, 'y1': 96, 'y2': 192, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 144, 'x2': 256, 'y1': 160, 'y2': 288, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 448, 'x2': 480, 'y1': 112, 'y2': 208, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 144, 'x2': 256, 'y1': 208, 'y2': 288, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 0, 'x2': 160, 'y1': 96, 'y2': 176, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 16, 'x2': 176, 'y1': 96, 'y2': 192, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 240, 'x2': 336, 'y1': 0, 'y2': 64, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 352, 'x2': 432, 'y1': 240, 'y2': 336, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 448, 'x2': 528, 'y1': 208, 'y2': 288, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}], [{'x1': 448, 'x2': 528, 'y1': 192, 'y2': 368, 'class': 'water1', 'prob': 0.9963981, 'inst_idx': 1}, {'x1': 624, 'x2': 736, 'y1': 144, 'y2': 336, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 192, 'x2': 432, 'y1': 192, 'y2': 320, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 304, 'x2': 416, 'y1': 288, 'y2': 400, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 784, 'x2': 848, 'y1': 208, 'y2': 352, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 304, 'x2': 416, 'y1': 352, 'y2': 464, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 224, 'x2': 400, 'y1': 208, 'y2': 288, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 192, 'x2': 416, 'y1': 208, 'y2': 288, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 544, 'x2': 640, 'y1': 48, 'y2': 208, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 576, 'x2': 672, 'y1': 384, 'y2': 496, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 752, 'x2': 864, 'y1': 352, 'y2': 480, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}]]
+'''
+
+if __name__ == '__main__':
+    labels=[[{'cls': 8, 'resized_box': {0: [318.9431081145833, 227.38908333333333, 489.0460939270833, 287.2283111111111], 1: [0.0, 99.11504444444445, 179.53373790624997, 185.84070555555556], 2: [142.85993447916664, 209.43731111111114, 402.00120878125, 304.5152]}}, {'cls': 0, 'resized_box': {0: [514.9602208020833, 180.1825777777778, 594.6959992187499, 361.69491111111114], 1: [223.51267277083332, 56.31536666666667, 304.71691615625, 241.35156666666668], 2: [447.00359803125, 161.98903333333334, 543.65302103125, 377.16849444444443]}}, {'cls': 7, 'resized_box': {0: [661.1424830833332, 165.5552111111111, 718.2864513229166, 340.4187388888889], 1: [334.4650064166666, 48.27031111111111, 439.78932088541666, 203.53982222222226], 2: [628.7704116145833, 143.4163388888889, 743.5416069791667, 337.93505555555555]}}, {'cls': 18, 'resized_box': {0: [431.23765790625, 303.8503222222222, 501.00646402083333, 407.57165555555554], 1: [118.93919984374999, 172.20401111111113, 254.49002204166663, 310.49912777777774], 2: [309.64059804166664, 284.56879444444445, 431.9021256875, 455.4430444444444]}}, {'cls': 109, 'resized_box': {0: [596.8102047916666, 93.08325, 690.439338875, 176.4955111111111], 1: [243.21073156249997, 0.0, 341.3794266458333, 76.10619444444445], 2: [531.57184315625, 64.67472777777779, 646.3430385208334, 185.56206111111112]}}, {'cls': 23, 'resized_box': {0: [744.8650459791666, 250.65989444444446, 813.3049220833333, 353.71635000000003], 1: [445.19142023958335, 113.02966111111112, 495.69074397916665, 203.4533888888889], 2: [782.53086234375, 210.45386666666667, 848.4282007499999, 342.33096111111115]}}, {'cls': 118, 'resized_box': {0: [702.3557753333333, 402.2251388888889, 762.21251925, 457.7234166666667], 1: [453.4974257395833, 210.60651111111113, 531.92179096875, 292.49181111111113], 2: [759.7822835416666, 343.5237333333333, 874.7546253333333, 475.46258888888894]}}, {'cls': 118, 'resized_box': {0: [582.6422763958334, 416.5118277777778, 636.4584369270833, 473.1090777777778], 1: [354.9245056770833, 241.62367222222224, 438.3085191875, 330.9530888888889], 2: [576.46973109375, 380.5309722222222, 678.5780346041666, 513.2743388888889]}}]]
+    labels_to_draw_format(labels, 3)
+
+class Json_writer :
+    def __init__ (self, args) :
+        self.jm = json_maker.json_maker([], args.result_json_path, 0)
+        self.jm.path = args.result_json_path
+        self.class_mapping = args.class_mapping
+        self.args = args
+
+    def write(self, all_dets, image_paths):
+        img_paths = list(image_paths[0].values())
+
+        for cam_idx, filepath in enumerate(img_paths): 
+            filename_with_ext = os.path.basename(filepath)
+            filename = filename_with_ext.split('.')[0]
+            filename_split = filename.split('-')
+            cam_num = str(int(filename_split[-1]))
+            scene_num = '-'.join(filename_split[:-1])
+
+            if not self.jm.is_scene_in_tree(scene_num) :
+                self.jm.insert_scene(scene_num)
+
+            if not self.jm.is_cam_in_scene(scene_num, cam_num): 
+                self.jm.insert_cam(scene_num, cam_num)
+                self.jm.insert_path(scene_num, cam_num, filename_with_ext)
+
+            dets = all_dets[cam_idx]
+            for det in dets:
+                x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
+
+                x1, y1, x2, y2 = [int(p/self.args.resize_ratio) for p in [x1, y1, x2, y2]]
+                cls_idx = self.class_mapping[cls] 
+                self.jm.insert_instance(scene_num, cam_num, inst_idx, cls_idx, x1, y1, x2, y2, prob) 
+                self.jm.insert_instance_summary(scene_num, inst_idx, cls_idx)
+
+    def close(self):
+        self.jm.sort()
+        self.jm.save()
+

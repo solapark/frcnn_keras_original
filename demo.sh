@@ -50,8 +50,31 @@ CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode save_ven_feature --dataset M
 CUDA_VISIBLE_DEVICES=3 python -m pdb main.py --mode save_ven_feature --dataset MESSYTABLE --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_reid_only/model/model_15.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir pickle/messytable/ven/val/mv_messytable_reid_only_model_15
 
 #messytable demo classifier only
-CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_real --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_real/model/model_87.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir pickle/messytable/ven/val/mv_messytable_reid_only_model_15 --classifier_nms_thresh .3
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_real --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_real/model/model_87.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir pickle/messytable/ven/val/mv_messytable_reid_only_model_15 
 
 #save_sv_wgt 
 CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode save_sv_wgt  --dataset MESSYTABLE --input_weight_path /data3/sap/frcnn_keras/model/sv_messytable_cam3_best/sv_messytable_cam3_resume_110_model.hdf5 --output_weight_path /data3/sap/frcnn_keras_original/model/sv_messytable_cam3_resume_110_model.hdf5 --num_valid_cam 3
 
+#draw_json
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir sv_messytable/asnet_majority --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/classification_majority.json 
+
+#val_json_json
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir sv_messytable --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sjyang/MVCNN/reid.json
+
+# write json
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning  --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model/model_80.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model_80.json --is_use_epipolar --max_dist_epiline_to_box .05
+
+
+CUDA_VISIBLE_DEVICES=3 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05 --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_reid_only/model/model_15.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/train/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir pickle/messytable/ven/train/mv_messytable_reid_only_model_15_max_dist_epiline_to_box.05 --max_dist_epiline_to_box .05
+
+# val 341
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --val_start_idx 341 --val_end_idx 341 --val_interval 1
+
+# train fine tunning
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --reset --mode train --dataset MESSYTABLE --save_dir tmp --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model/model_341.hdf5 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --max_dist_epiline_to_box .05
+
+# val fine tunning
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --val_start_idx 1 --val_end_idx 3 --val_interval 1 --max_dist_epiline_to_box .05
+
+#demo 341
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model_341 --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model/model_341.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --max_dist_epiline_to_box .05

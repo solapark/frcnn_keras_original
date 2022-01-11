@@ -37,11 +37,11 @@ class DATALOADER :
 
         self.image_dataloader = IMAGE_DATALOADER(self.img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
-        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
+        if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models' or self.mode == 'draw_json':
             self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
             self.label_dataloader = BASE_DATALOADER(self.resized_instance_list, self.batch_size)
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
+        if self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo' or self.mode == 'draw_json':
             self.image_path_dataloader = BASE_DATALOADER(self.img_path_list, self.batch_size)
 
         if self.args.is_use_epipolar : 
@@ -92,7 +92,7 @@ class DATALOADER :
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
                 if self.args.dataset == 'MESSYTABLE' : cls -= 1
-                resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}}
+                resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}, 'prob':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
                     cam_num = int(cam_num)
                     if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
@@ -104,6 +104,8 @@ class DATALOADER :
                         y1 *= zoom_in_h                
                         y2 *= zoom_in_h                
                         resized_instance_dict[instance_num]['resized_box'][cam_num] = list(map(float, [x1, y1, x2, y2]))
+                        prob = camera_content['instances'][instance_num]['prob'] if 'prob' in camera_content['instances'][instance_num] else 1
+                        resized_instance_dict[instance_num]['prob'][cam_num] = prob
                 if len(resized_instance_dict[instance_num]['resized_box']) == 0 :
                     resized_instance_dict.pop(instance_num)
 
@@ -120,10 +122,10 @@ class DATALOADER :
 
         images = self.image_dataloader[idx]
 
-        if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models':
+        if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models' or self.mode == 'draw_json':
             labels = self.label_dataloader[idx]
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
+        if self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo' or self.mode == 'draw_json':
             image_paths = self.image_path_dataloader[idx]
 
         if self.args.is_use_epipolar : 
@@ -144,10 +146,10 @@ class DATALOADER :
             np.random.shuffle(self.indices)
         self.image_dataloader.set_indices(self.indices)
 
-        if(self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'):
+        if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models'or self.mode == 'draw_json':
             self.label_dataloader.set_indices(self.indices)
 
-        elif self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo':
+        if self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo' or self.mode == 'draw_json':
             self.image_path_dataloader.set_indices(self.indices)
 
         if self.args.is_use_epipolar : 

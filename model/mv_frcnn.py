@@ -19,9 +19,6 @@ import tmp
 
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
-set_session(tf.Session(config=config))
 
 def make_model(args):
     return MV_FRCNN(args)
@@ -32,6 +29,15 @@ class MV_FRCNN:
         self.class_list = list(args.class_mapping.keys())
         self.num_anchors = args.num_anchors
         self.mode = args.mode
+
+        config = tf.ConfigProto()
+        if args.mode == 'train':
+            gpu_memory_fraction = .8
+        else :
+            gpu_memory_fraction = .5
+
+        config.gpu_options.per_process_gpu_memory_fraction = gpu_memory_fraction
+        set_session(tf.Session(config=config))
 
         base_net = import_module('model.' + args.base_net.lower()).make_model(args)
         self.model_rpn, self.model_ven, self.model_classifier, self.model_all = self.make_model(args, base_net)
@@ -255,6 +261,7 @@ class MV_FRCNN:
         offset = 2 if self.args.mode == 'train' else 4
 
         P_rpn = self.model_rpn.predict_on_batch(list(X))
+        utility.pickle_save('mv_rpn.pickle', P_rpn[:2])
 
         rois = [tmp.rpn_to_roi(P_rpn[i*offset], P_rpn[i*offset+1], self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms) for i in range(self.args.num_valid_cam)]
 
@@ -517,6 +524,7 @@ class MV_FRCNN:
 
     def rpn_train_batch(self, X, debug_img, Y):
         rpn_gt_batch = self.rpn_gt_calculator.get_batch(Y)
+        #rpn_gt_batch = utility.pickle_load('sv_gt.pickle') * 3
         loss_rpn = self.model_rpn.train_on_batch(list(X), rpn_gt_batch)
         #self.rpn_gt_calculator.draw_rpn_gt(np.array(debug_img), rpn_gt_batch)
 

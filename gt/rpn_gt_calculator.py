@@ -47,6 +47,7 @@ class RPN_GT_CALCULATOR:
             result_list.extend([rpn_gt_cls, rpn_gt_regr])
         return result_list
 
+    '''
     def calc_rpn_gt(self, gt_boxes) :
         gt_boxes = np.array(gt_boxes)
         num_gt_boxes = len(gt_boxes)
@@ -82,14 +83,18 @@ class RPN_GT_CALCULATOR:
                         continue
                     
                     anchor_box = [x1_anc, y1_anc, x2_anc, y2_anc]
+                    #if jy == 9 and ix == 40 and ka == 0 :
+                    #    print('check')
 
                     best_iou = 0.0 
                     best_gt_box_idx = -1
+                    best_gt_box = None
                     for gt_box_idx, gt_box in enumerate(gt_boxes):
                         cur_iou = iou(gt_box, anchor_box)
                         if cur_iou > best_iou : 
                             best_iou = cur_iou
                             best_gt_box_idx = gt_box_idx
+                            best_gt_box = gt_box
                         
                         if cur_iou > best_iou_for_gt_box[gt_box_idx]:
                             best_iou_for_gt_box[gt_box_idx] = cur_iou
@@ -99,7 +104,7 @@ class RPN_GT_CALCULATOR:
                     if best_iou > self.rpn_max_overlap:
                         pos_anchor_idx = np.append(pos_anchor_idx, [[jy, ix, ka]], 0)
                         pos_anchor_box = np.append(pos_anchor_box, [anchor_box], 0)
-                        pos_gt_box = np.append(pos_gt_box, [gt_box], 0)
+                        pos_gt_box = np.append(pos_gt_box, [best_gt_box], 0)
                         num_anchors_for_gt_box[best_gt_box_idx] += 1
 
                     elif best_iou < self.rpn_min_overlap:
@@ -116,7 +121,6 @@ class RPN_GT_CALCULATOR:
         neg_anchor_idx = np.delete(neg_anchor_idx, neg_anchor_idx_for_gt_box, 0)
                       
         num_pos, num_neg = len(pos_anchor_idx), len(neg_anchor_idx)
-        '''
         if(num_pos > self.rpn_num_pos_max) : 
             valid_pos_idx = np.random.choice(num_pos, self.rpn_num_pos_max)
             pos_anchor_idx = pos_anchor_idx[valid_pos_idx]
@@ -127,7 +131,6 @@ class RPN_GT_CALCULATOR:
         if(num_pos + num_neg > self.rpn_max_num_sample) : 
             valid_neg_idx = np.random.choice(num_neg, num_pos)
             neg_anchor_idx = neg_anchor_idx[valid_neg_idx]
-        '''
 
         y_is_sample = np.zeros((self.output_height, self.output_width, self.num_anchors))
         y_is_pos = np.zeros((self.output_height, self.output_width, self.num_anchors))
@@ -146,11 +149,146 @@ class RPN_GT_CALCULATOR:
         y_rpn_regr = np.concatenate([np.repeat(y_is_pos, 4, axis=-1), y_regr], axis=-1)
         
         return y_rpn_cls, y_rpn_regr
+    '''
 
+    def calc_rpn_pos_neg(self, gt_boxes) :
+        gt_boxes = np.array(gt_boxes)
+        num_gt_boxes = len(gt_boxes)
+        #if(num_gt_boxes) : gt_boxes[:,[2,1]] = gt_boxes[:,[1,2]] #x1, y1, x2, y2
+
+        pos_anchor_idx, neg_anchor_idx = np.zeros((0, 3), dtype='int32'), np.zeros((0, 3), dtype='int32')
+        pos_anchor_box, pos_gt_box = np.zeros((0, 4)), np.zeros((0, 4))
+
+        best_iou_for_gt_box = np.zeros((num_gt_boxes, )).astype(np.float32)
+        best_anchor_box_for_gt_box = np.zeros((num_gt_boxes, 4))
+        best_anchor_idx_for_gt_box = np.zeros((num_gt_boxes, 3))
+        num_anchors_for_gt_box = np.zeros((num_gt_boxes, ))
+        neg_anchor_idx_for_gt_box = np.zeros((num_gt_boxes, ), dtype='int32')
+    
+        x1_anc_list = []
+        y1_anc_list = []
+        for ka, (anchor_w, anchor_h) in enumerate(self.anchor_wh):
+            for ix in range(self.output_width):                  
+                x1_anc = self.downscale * (ix + 0.5) - anchor_w / 2
+                x1_anc_list.append(x1_anc)
+                x2_anc = x1_anc + anchor_w
+
+                if x1_anc < 0 or x2_anc > self.resized_width:
+                    continue
+                    
+                for jy in range(self.output_height):
+                    y1_anc = self.downscale * (jy + 0.5) - anchor_h / 2
+                    y1_anc_list.append(y1_anc)
+                    y2_anc = y1_anc + anchor_h
+
+                    # ignore boxes that go across image boundaries
+                    if y1_anc < 0 or y2_anc > self.resized_height:
+                        continue
+                    
+                    anchor_box = [x1_anc, y1_anc, x2_anc, y2_anc]
+                    #if jy == 9 and ix == 40 and ka == 0 :
+                    #    print('check')
+
+                    best_iou = 0.0 
+                    best_gt_box_idx = -1
+                    best_gt_box = None
+                    for gt_box_idx, gt_box in enumerate(gt_boxes):
+                        cur_iou = iou(gt_box, anchor_box)
+                        if cur_iou > best_iou : 
+                            best_iou = cur_iou
+                            best_gt_box_idx = gt_box_idx
+                            best_gt_box = gt_box
+                        
+                        if cur_iou > best_iou_for_gt_box[gt_box_idx]:
+                            best_iou_for_gt_box[gt_box_idx] = cur_iou
+                            best_anchor_idx_for_gt_box[gt_box_idx] = [jy, ix, ka]
+                            best_anchor_box_for_gt_box[gt_box_idx] = anchor_box
+
+                    if best_iou > self.rpn_max_overlap:
+                        pos_anchor_idx = np.append(pos_anchor_idx, [[jy, ix, ka]], 0)
+                        pos_anchor_box = np.append(pos_anchor_box, [anchor_box], 0)
+                        pos_gt_box = np.append(pos_gt_box, [best_gt_box], 0)
+                        num_anchors_for_gt_box[best_gt_box_idx] += 1
+
+                    elif best_iou < self.rpn_min_overlap:
+                        if np.array_equal(best_anchor_idx_for_gt_box[best_gt_box_idx], [jy, ix, ka]) :
+                            neg_anchor_idx_for_gt_box[best_gt_box_idx] = len(neg_anchor_idx)
+                        neg_anchor_idx = np.append(neg_anchor_idx, [[jy, ix, ka]], 0)
+
+        not_covered_gt_box_idx = np.where(num_anchors_for_gt_box == 0)
+        additional_pos_anchor_idx, additional_pos_anchor_box, additional_pos_gt_box, neg_anchor_idx_to_remove = map(lambda a : a[not_covered_gt_box_idx], [best_anchor_idx_for_gt_box, best_anchor_box_for_gt_box, gt_boxes, neg_anchor_idx_for_gt_box])
+        
+        pos_anchor_idx = np.append(pos_anchor_idx, additional_pos_anchor_idx.reshape(-1, 3), 0)
+        pos_anchor_box = np.append(pos_anchor_box, additional_pos_anchor_box.reshape(-1, 4), 0)
+        pos_gt_box = np.append(pos_gt_box, additional_pos_gt_box.reshape(-1, 4), 0)
+        neg_anchor_idx = np.delete(neg_anchor_idx, neg_anchor_idx_for_gt_box, 0)
+
+        return pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box
+
+    def get_random_rpn_pos_neg(self, pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr):
+        num_pos, num_neg = len(pos_anchor_idx), len(neg_anchor_idx)
+        if(num_pos > self.rpn_num_pos_max) : 
+            valid_pos_idx = np.random.choice(num_pos, self.rpn_num_pos_max)
+            pos_anchor_idx = pos_anchor_idx[valid_pos_idx]
+            pos_anchor_box = pos_anchor_box[valid_pos_idx]
+            pos_gt_box = pos_gt_box[valid_pos_idx]
+            pos_regr = pos_regr[valid_pos_idx]
+            num_pos = len(pos_anchor_idx)
+
+        if(num_pos + num_neg > self.rpn_max_num_sample) : 
+            valid_neg_idx = np.random.choice(num_neg, num_pos)
+            neg_anchor_idx = neg_anchor_idx[valid_neg_idx]
+
+        return pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr
+
+    def gen_y_cls_y_regr(self, pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr):
+        y_is_sample = np.zeros((self.output_height, self.output_width, self.num_anchors))
+        y_is_pos = np.zeros((self.output_height, self.output_width, self.num_anchors))
+        y_regr = np.zeros((self.output_height, self.output_width, self.num_anchors, 4))
+
+        pos_anchor_idx, neg_anchor_idx = map(lambda a : tuple(a.astype('int32').T), [pos_anchor_idx, neg_anchor_idx])
+        y_is_sample[pos_anchor_idx] = 1
+        y_is_sample[neg_anchor_idx] = 1
+        y_is_pos[pos_anchor_idx] = 1
+
+        y_regr[pos_anchor_idx] = pos_regr 
+        y_regr = y_regr.reshape(self.output_height, self.output_width, self.num_anchors*4)
+
+        y_rpn_cls = np.concatenate([y_is_sample, y_is_pos], axis=-1)
+        y_rpn_regr = np.concatenate([np.repeat(y_is_pos, 4, axis=-1), y_regr], axis=-1)
+        
+        return y_rpn_cls, y_rpn_regr
+
+    def calc_rpn_gt(self, gt_boxes):
+        pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box = self.calc_rpn_pos_neg(gt_boxes)
+        pos_regr = self.calc_regr.calc_t(pos_anchor_box, pos_gt_box)
+
+        pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr = self.get_random_rpn_pos_neg(pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr)
+
+        y_rpn_cls, y_rpn_regr = self.gen_y_cls_y_regr(pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr)
+
+        return y_rpn_cls, y_rpn_regr
+        
+    def save_rpn_gt(self, gt_boxes, path):
+        pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box = self.calc_rpn_gt(gt_boxes)
+        pos_regr = self.calc_regr.calc_t(pos_anchor_box, pos_gt_box)
+
+        data = [pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr]
+        utility.pickle_save(path, data)
+
+    def load_rpn_gt(self, path):
+        pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr = utility.pickle_load(path)
+
+        pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr = self.get_random_rpn_pos_neg(pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr)
+
+        y_rpn_cls, y_rpn_regr = self.gen_y_cls_y_regr(pos_anchor_idx, neg_anchor_idx, pos_anchor_box, pos_gt_box, pos_regr)
+
+        return y_rpn_cls, y_rpn_regr
+ 
     def draw_rpn_gt(self, imgs_in_batch, rpn_gt_batch) : 
         imgs_in_batch = imgs_in_batch.transpose(1, 0, 2, 3, 4)
         rpn_cls_in_batch = [np.concatenate(rpn_gt_batch[::2])]
-        cv2.namedWindow("img", cv2.WINDOW_NORMAL) 
+        #cv2.namedWindow("img", cv2.WINDOW_NORMAL) 
         color = (0, 0, 255)
         anchor_wh = np.array(self.anchor_wh)
         result_imgs_batch = []

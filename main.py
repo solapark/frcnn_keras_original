@@ -103,7 +103,7 @@ def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
         if not os.path.isfile(model_path) :
             log_manager.write_log('{} doesn\'t exist\n'.format(model_path)) 
             break
-        #model.load(model_path)
+        model.load(model_path)
         log_manager.write_log('model : {}\n'.format(model_path)) 
         calc_map(args, model, log_manager, img_preprocessor, val_dataloader)   
 
@@ -117,6 +117,72 @@ def demo(args, model, img_preprocessor, dataloader):
         all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
         result_saver.save(images, image_paths, all_dets)
         progbar.update(idx+1)
+
+def draw_json(args, dataloader):
+    progbar = generic_utils.Progbar(len(dataloader))
+    result_saver = utility.Result_saver(args)
+    for idx in range(len(dataloader)):
+        images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
+        
+        #new_labels = utility.labels_to_draw_format(labels, args.num_cam, args.sv_num2cls_with_bg)
+        #new_labels = utility.labels_to_draw_format(labels, args.num_cam, args.num2cls_with_bg, args.resize_ratio)
+        new_labels = utility.labels_to_draw_format(labels, args.num_cam, args.num2cls_with_bg)
+        result_saver.save(images, image_paths, new_labels)
+        progbar.update(idx+1)
+
+def write_json(args, model, img_preprocessor, dataloader):
+    progbar = generic_utils.Progbar(len(dataloader))
+    json_writer = utility.Json_writer(args)
+    for idx in range(len(dataloader)):
+        images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
+        X = img_preprocessor.process_batch(images)
+        all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
+        json_writer.write(all_dets, image_paths)
+        progbar.update(idx+1)
+
+    json_writer.close()
+
+def val_json_json(args, gt_dataloader, pred_dataloader):
+    utility.file_system(args)
+    log_manager = utility.Log_manager(args)
+    map_calculator = utility.Map_calculator(args)
+    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
+    timer_test = utility.timer()
+
+    progbar = generic_utils.Progbar(len(gt_dataloader))
+    for idx in range(len(gt_dataloader)):
+        _, gt_labels, _, _, _, _  = gt_dataloader[idx]
+        _, pred_labels, _, _, _, _  = pred_dataloader[idx]
+
+        gt_batch = sv_gt_batch_generator.get_gt_batch(gt_labels)
+        #all_dets = utility.labels_to_draw_format(pred_labels, args.num_cam, args.sv_num2cls_with_bg)
+        all_dets = utility.labels_to_draw_format(pred_labels, args.num_cam, args.num2cls_with_bg)
+ 
+        for cam_idx in range(args.num_valid_cam) : 
+            dets = all_dets[cam_idx]
+            gt = gt_batch[0][cam_idx]
+            map_calculator.add_img_tp(dets, gt) 
+
+        progbar.update(idx+1)
+    
+    all_aps = map_calculator.get_aps()
+    iou_avg = map_calculator.get_iou()
+
+    log_manager.add(all_aps, 'ap')
+    log_manager.add(iou_avg, 'iou')
+    log_manager.save()
+
+    all_ap_dict = map_calculator.get_aps_dict()
+    cur_map = map_calculator.get_map()
+    log_manager.write_cur_time()
+    log_manager.write_log('Evaluation:')
+    log_manager.write_log('iou: {:.3f}'.format(iou_avg))
+    for cls, prob in all_ap_dict.items():
+        log_manager.write_log('%s\t%.4f'%(cls, prob))
+    log_manager.write_log('mAP\t%.4f'%(cur_map))
+    log_manager.write_log('Runtime: {:.2f}s\n'.format(timer_test.toc()))
+    return cur_map
+
 
 def save_rpn_feature(args, model, img_preprocessor, dataloader) :
     rpn_result_saver = utility.Pickle_result_saver(args, args.rpn_pickle_dir)
@@ -177,3 +243,18 @@ if __name__ == '__main__' :
         save_ven_feature(args, model, img_preprocessor, dataloader)
     elif(args.mode == 'save_sv_wgt'):
         save_sv_wgt(args, model)
+
+    elif(args.mode == 'draw_json'):
+        dataloader = DATALOADER(args, 'draw_json', args.dataset_path)
+        draw_json(args, dataloader)
+
+    elif(args.mode == 'val_json_json'):
+        gt_dataloader = DATALOADER(args, 'val', args.dataset_path)
+        pred_dataloader = DATALOADER(args, 'val', args.pred_dataset_path)
+        val_json_json(args, gt_dataloader, pred_dataloader)
+
+    elif(args.mode == 'write_json'):
+        dataloader = DATALOADER(args, 'demo', args.dataset_path)
+        write_json(args, model, img_preprocessor, dataloader)
+
+
