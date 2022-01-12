@@ -9,10 +9,13 @@ from tqdm import tqdm
 from bipartite_graph import Bipartite_graph
 from json_maker import json_maker
 
-asnet_result_path = '/data3/sap/Messytable/models/asnet/results_img_pairs.json'
+#asnet_result_path = '/data3/sap/Messytable/models/svdet+asnet/results_img_pairs.json'
+asnet_result_path = '/data3/sap/Messytable/models/svdet+triplenet/results_img_pairs.json'
 
 src_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log_with_gt_inst_id.json'
-dst_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/reid.json'
+#dst_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json'
+dst_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet.json'
+
 num_cam = 3
 
 scale_up_factor = 10

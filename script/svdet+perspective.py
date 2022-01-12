@@ -10,7 +10,7 @@ from bipartite_graph import Bipartite_graph
 from json_maker import json_maker
 
 src_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log_with_gt_inst_id.json'
-dst_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/reid.json'
+dst_json_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+perspective.json'
 num_cam = 3
 
 import numpy as np
