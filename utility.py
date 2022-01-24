@@ -1066,7 +1066,8 @@ class Result_saver :
         self.result_img_save_dir = os.path.join(args.base_path, 'experiment', args.save_dir, 'test_result')
         os.path.join(self.args.base_path, self.result_img_save_dir)
         os.makedirs(self.result_img_save_dir, exist_ok=True) 
-        self.colors = np.random.randint(0, 255, (args.num_nms, 3)).tolist()
+        np.random.seed(0)
+        self.colors = np.random.randint(0, 255, (args.num_cls_with_bg, 3)).tolist()
 
     def save(self, X, img_paths, all_dets):
         save_path = self.get_general_file_name(img_paths)
@@ -1075,6 +1076,8 @@ class Result_saver :
             dets = all_dets[cam_idx]
             for det in dets:
                 x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
+                cls_idx = self.args.cls2num[cls]
+                #det_color = self.colors[cls_idx]
                 det_color = self.colors[inst_idx]
                 img_list[cam_idx] = draw_inst(img_list[cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
                 #break
@@ -1107,6 +1110,7 @@ def labels_to_draw_format(labels, num_cam, num2cls_with_bg):
     dst = [[] for _ in range(num_cam)]
 
     for i, inst in enumerate(src) :
+        instance_num = int(inst['instance_num'])
         cls = num2cls_with_bg[inst['cls']+1]
         #cls = num2cls_with_bg[inst['cls']]
         if cls == 'bg' :
@@ -1118,7 +1122,7 @@ def labels_to_draw_format(labels, num_cam, num2cls_with_bg):
             x1, y1, x2, y2 = list(map(int, box))
             #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
             prob = probs_all_cam[cam_idx]
-            dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':i})
+            dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':instance_num})
 
     return dst
 '''

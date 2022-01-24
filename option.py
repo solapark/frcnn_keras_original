@@ -99,7 +99,8 @@ parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_
 #reid
 parser.add_argument('--is_use_epipolar', action="store_true", default=False)
 parser.add_argument('--reid_min_emb_dist', type=float, default=.5, help='minimum embedding distance to match two pred boxes')
-parser.add_argument('--max_dist_epiline_to_box', type=float, default=.01, help='valid maximum distance from target box to epipolar line')
+#parser.add_argument('--max_dist_epiline_to_box', type=float, default=.01, help='valid maximum distance from target box to epipolar line')
+parser.add_argument('--max_dist_epiline_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_cross_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar cross line')
 
 

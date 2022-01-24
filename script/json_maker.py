@@ -20,8 +20,8 @@ class json_maker :
     def sort(self) :
         self.json['scenes'] = dict(sorted(self.json['scenes'].items(), key=lambda item : item[0]))
         for scene in self.json['scenes']:
-            self.json['scenes'][scene]['instance_summary'] = dict(sorted(self.json['scenes'][scene]['instance_summary'].items(), key=lambda item : item[0]))
-            self.json['scenes'][scene]['cameras'] = dict(sorted(self.json['scenes'][scene]['cameras'].items(), key=lambda item : item[0]))
+            self.json['scenes'][scene]['instance_summary'] = dict(sorted(self.json['scenes'][scene]['instance_summary'].items(), key=lambda item : int(item[0])))
+            self.json['scenes'][scene]['cameras'] = dict(sorted(self.json['scenes'][scene]['cameras'].items(), key=lambda item : int(item[0])))
             for cam_str in self.json['scenes'][scene]['cameras'].keys() :
                 self.json['scenes'][scene]['cameras'][cam_str]['instances'] = dict(sorted(self.json['scenes'][scene]['cameras'][cam_str]['instances'].items(), key=lambda item : int(item[0])))
                 
@@ -41,6 +41,9 @@ class json_maker :
     def is_inst_in_instance_summary(self, scene, inst):
         if inst in self.json['scenes'][scene]['instance_summary'] : return True
         else : return False
+
+    def get_cls_in_instance_summary(self, scene, inst):
+        return self.json['scenes'][scene]['instance_summary'][inst]
 
     def get_instance_summary(self, scene_num):
         return self.json['scenes'][scene_num]['instance_summary']
@@ -67,6 +70,9 @@ class json_maker :
 
     def insert_pred_id(self, scene, cam, inst, pred_id) :
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['pred_id'] = pred_id
+
+    def change_prob_in_cam(self, scene, cam, inst, prob) :
+        self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['prob'] = prob
 
     def change_cls_in_cam(self, scene, cam, inst, cls) :
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['subcls'] = cls
@@ -118,6 +124,14 @@ class json_maker :
 
     def get_number_of_insts(self, scene_num, cam_num):
         return len(self.json['scenes'][scene_num]['cameras'][cam_num]['instances'])
+
+    def reset_instance_summary(self, scene_name):
+        self.json['scenes'][scene_name]['instance_summary'] = {}
+
+    def reset_instances(self, scene_name):
+        for cam_idx in range(self.num_cam) :
+            cam_idx = str(cam_idx+1)
+            self.json['scenes'][scene_name]['cameras'][cam_idx]['instances'] = {}
 
     def print(self) :
         print(json.dumps(self.json, indent=4))

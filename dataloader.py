@@ -92,7 +92,7 @@ class DATALOADER :
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
                 if self.args.dataset == 'MESSYTABLE' : cls -= 1
-                resized_instance_dict[instance_num] = {'cls':cls, 'resized_box':{}, 'prob':{}}
+                resized_instance_dict[instance_num] = {'cls':cls, 'instance_num':instance_num, 'resized_box':{}, 'prob':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
                     cam_num = int(cam_num)
                     if self.args.dataset == 'MESSYTABLE' : cam_num -= 1

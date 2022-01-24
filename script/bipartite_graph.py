@@ -27,4 +27,4 @@ if __name__ == '__main__':
     G = Bipartite_graph()
     G.add_weighted_edges([('1', 'a', 2), ('2', 'b', 4), ('1', 'b', 1)])
     #G.draw()
-    print(G.match())
+    #print(G.match())

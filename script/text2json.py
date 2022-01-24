@@ -2,7 +2,7 @@ import json
 
 src_json = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/reid.json'
 src_txt = '/data3/sjyang/MVCNN/reid_result.txt'
-dst_json ='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/classification_mvcnn.json'
+dst_json ='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+mvcnn.json'
 
 f = open(src_txt,'r')
 

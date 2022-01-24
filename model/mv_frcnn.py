@@ -518,7 +518,7 @@ class MV_FRCNN:
             #cls_box, cls_prob, is_valids, cls_iou = utility.classifier_output_to_box_prob(np.array(X2_list), Y1, Y2, iou_list, self.args, 0, self.args.num_valid_cam, False)
             #utility.draw_cls_box_prob(np.array(debug_img).transpose(1, 0, 2, 3, 4)[0], cls_box, cls_prob, cls_iou, self.args, self.args.num_valid_cam, is_nms=False)
 
-        print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
+        #print('pos', num_pos_samples[0], 'neg', num_neg_samples[0])
 
         return loss, num_pos_samples[0]
 

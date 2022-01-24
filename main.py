@@ -33,7 +33,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
             loss, num_calssifier_pos_samples = model.train_batch(X, images, labels, image_paths, extrins, rpn_results, ven_results)
             timer_model.hold()
 
-            print('loss', loss) 
+            #print('loss', loss) 
             #print('num_calssifier_pos_samples', num_calssifier_pos_samples)
 
             if(loss[-1] == np.inf) : continue 
