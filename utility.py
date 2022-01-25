@@ -541,9 +541,9 @@ class Map_calculator:
         return np.mean(np.array(self.all_aps))
 
     def get_aps(self):
-        all_aps = [average_precision_score(t, p) if t else 0 for t, p in zip(self.all_T.values(), self.all_P.values())]
-        all_aps = [ap if not math.isnan(ap) else 0 for ap in all_aps]
-        all_aps = [0 if ap == 1.0 else ap for ap in all_aps]
+        all_aps = [average_precision_score(t, p) if len(t) else 0 for t, p in zip(self.all_T.values(), self.all_P.values())]
+        #all_aps = [ap if not math.isnan(ap) else 0 for ap in all_aps]
+        #all_aps = [0 if ap == 1.0 else ap for ap in all_aps]
         self.all_aps = all_aps
         return all_aps
 
@@ -1079,6 +1079,9 @@ class Result_saver :
                 cls_idx = self.args.cls2num[cls]
                 #det_color = self.colors[cls_idx]
                 det_color = self.colors[inst_idx]
+
+                #x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+                prob = round(prob, 2)
                 img_list[cam_idx] = draw_inst(img_list[cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
                 #break
         conc_img = get_concat_img(img_list)
@@ -1097,34 +1100,47 @@ def get_value_in_pattern(text, pattern):
     #return = ['b']
     return re.findall(pattern, text)[0]
 
-#def labels_to_draw_format(labels, num_cam, num2cls_with_bg, resize_ratio):
-def labels_to_draw_format(labels, num_cam, num2cls_with_bg):
-    # labels 
-        #size : (batch_size, num_inst)
-        #{cls : , resized_box : {cam_idx : [x1, y1, x2, y2], cam_idx : [x1, y1, x2, y2], ...}
-    # all_dets 
-        #size : (num_cam)
-        #[ {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 1}, {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 2}, ...]
+class Labels_to_draw_format :
+    def __init__(self, args, dataset_path):
+        filename = dataset_path.split('/')[-1]
+        if ('log' in filename or 'sv' in filename) and 'mvcnn' not in filename:
+            self.num2cls_with_bg = args.sv_num2cls_with_bg 
+        else :
+            self.num2cls_with_bg = args.num2cls_with_bg 
 
-    src = labels[0]
-    dst = [[] for _ in range(num_cam)]
+        if filename not in ['train.json', 'val.json', 'test.json'] :
+            self.num2cls_with_bg = {k-1 : v for (k, v) in self.num2cls_with_bg.items()}
 
-    for i, inst in enumerate(src) :
-        instance_num = int(inst['instance_num'])
-        cls = num2cls_with_bg[inst['cls']+1]
-        #cls = num2cls_with_bg[inst['cls']]
-        if cls == 'bg' :
-            continue
+        self.num_cam = args.num_cam
 
-        boxes_all_cam = inst['resized_box']
-        probs_all_cam = inst['prob']
-        for cam_idx, box in boxes_all_cam.items() :
-            x1, y1, x2, y2 = list(map(int, box))
-            #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
-            prob = probs_all_cam[cam_idx]
-            dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':instance_num})
+    def labels_to_draw_format(self, labels):
+        # labels 
+            #size : (batch_size, num_inst)
+            #{cls : , resized_box : {cam_idx : [x1, y1, x2, y2], cam_idx : [x1, y1, x2, y2], ...}
+        # all_dets 
+            #size : (num_cam)
+            #[ {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 1}, {'x1': , 'x2': , 'y1': , 'y2': , 'class': , 'prob': , 'inst_idx': 2}, ...]
 
-    return dst
+        src = labels[0]
+        dst = [[] for _ in range(self.num_cam)]
+
+        for i, inst in enumerate(src) :
+            instance_num = int(inst['instance_num'])
+            cls = self.num2cls_with_bg[inst['cls']]
+            if cls == 'bg' :
+                continue
+
+            boxes_all_cam = inst['resized_box']
+            probs_all_cam = inst['prob']
+            for cam_idx, box in boxes_all_cam.items() :
+                x1, y1, x2, y2 = list(map(round, box))
+                #x1, y1, x2, y2 = list(map(int, box))
+                #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
+                prob = probs_all_cam[cam_idx]
+                dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':instance_num})
+
+        return dst
+
 '''
     all_dets = [[{'x1': 512, 'x2': 592, 'y1': 176, 'y2': 368, 'class': 'water1', 'prob': 0.9963981, 'inst_idx': 1}, {'x1': 656, 'x2': 720, 'y1': 176, 'y2': 352, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 336, 'x2': 528, 'y1': 224, 'y2': 272, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 432, 'x2': 496, 'y1': 304, 'y2': 416, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 752, 'x2': 832, 'y1': 256, 'y2': 352, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 432, 'x2': 496, 'y1': 304, 'y2': 400, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 336, 'x2': 496, 'y1': 224, 'y2': 288, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 336, 'x2': 496, 'y1': 224, 'y2': 288, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 576, 'x2': 672, 'y1': 96, 'y2': 176, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 576, 'x2': 640, 'y1': 416, 'y2': 480, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 688, 'x2': 768, 'y1': 400, 'y2': 464, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}], [{'x1': 336, 'x2': 448, 'y1': 64, 'y2': 224, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 16, 'x2': 160, 'y1': 96, 'y2': 192, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 144, 'x2': 256, 'y1': 160, 'y2': 288, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 448, 'x2': 480, 'y1': 112, 'y2': 208, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 144, 'x2': 256, 'y1': 208, 'y2': 288, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 0, 'x2': 160, 'y1': 96, 'y2': 176, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 16, 'x2': 176, 'y1': 96, 'y2': 192, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 240, 'x2': 336, 'y1': 0, 'y2': 64, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 352, 'x2': 432, 'y1': 240, 'y2': 336, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 448, 'x2': 528, 'y1': 208, 'y2': 288, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}], [{'x1': 448, 'x2': 528, 'y1': 192, 'y2': 368, 'class': 'water1', 'prob': 0.9963981, 'inst_idx': 1}, {'x1': 624, 'x2': 736, 'y1': 144, 'y2': 336, 'class': 'tea1', 'prob': 0.99987066, 'inst_idx': 2}, {'x1': 192, 'x2': 432, 'y1': 192, 'y2': 320, 'class': 'tea2', 'prob': 0.95497465, 'inst_idx': 3}, {'x1': 304, 'x2': 416, 'y1': 288, 'y2': 400, 'class': 'juice2', 'prob': 0.9626004, 'inst_idx': 4}, {'x1': 784, 'x2': 848, 'y1': 208, 'y2': 352, 'class': 'can5', 'prob': 0.9463558, 'inst_idx': 5}, {'x1': 304, 'x2': 416, 'y1': 352, 'y2': 464, 'class': 'snack10', 'prob': 0.4284972, 'inst_idx': 6}, {'x1': 224, 'x2': 400, 'y1': 208, 'y2': 288, 'class': 'snack23', 'prob': 0.7482975, 'inst_idx': 7}, {'x1': 192, 'x2': 416, 'y1': 208, 'y2': 288, 'class': 'snack24', 'prob': 0.49483487, 'inst_idx': 8}, {'x1': 544, 'x2': 640, 'y1': 48, 'y2': 208, 'class': 'pink_mug', 'prob': 0.99965954, 'inst_idx': 9}, {'x1': 576, 'x2': 672, 'y1': 384, 'y2': 496, 'class': 'glass2', 'prob': 0.9954301, 'inst_idx': 10}, {'x1': 752, 'x2': 864, 'y1': 352, 'y2': 480, 'class': 'glass2', 'prob': 0.9929091, 'inst_idx': 11}]]
 '''

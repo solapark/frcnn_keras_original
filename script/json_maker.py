@@ -64,7 +64,7 @@ class json_maker :
         self.json['scenes'][scene]['instance_summary'][inst] = cls
 
     def insert_instance(self, scene, cam, inst, cls, x1, y1, x2, y2, prob=None) :
-        x1, y1, x2, y2 = list(map(int, [x1, y1, x2, y2]))
+        x1, y1, x2, y2 = list(map(float, [x1, y1, x2, y2]))
         prob = float(prob) if prob else None
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst] = {'subcls' : cls, 'pos': [x1, y1, x2, y2], 'prob':prob}
 
@@ -122,7 +122,10 @@ class json_maker :
             inst_dict_list.append(inst_dict)
         return path_name, inst_dict_list
 
-    def get_number_of_insts(self, scene_num, cam_num):
+    def get_number_of_insts_in_instance_summary(self, scene_num):
+        return len(self.get_instance_summary(scene_num))
+
+    def get_number_of_insts_in_cam(self, scene_num, cam_num):
         return len(self.json['scenes'][scene_num]['cameras'][cam_num]['instances'])
 
     def reset_instance_summary(self, scene_name):

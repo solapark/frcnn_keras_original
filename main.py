@@ -121,16 +121,11 @@ def demo(args, model, img_preprocessor, dataloader):
 def draw_json(args, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     result_saver = utility.Result_saver(args)
-    if 'sv' in args.dataset_path.split('/')[-1] and 'mvcnn' not in args.dataset_path.split('/')[-1]:
-        num2cls_with_bg = args.sv_num2cls_with_bg 
-    else :
-        num2cls_with_bg = args.num2cls_with_bg 
+    L2D = utility.Labels_to_draw_format(args, args.dataset_path)
 
     for idx in range(len(dataloader)):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
-        
-        #new_labels = utility.labels_to_draw_format(labels, args.num_cam, num2cls_with_bg, args.resize_ratio)
-        new_labels = utility.labels_to_draw_format(labels, args.num_cam, num2cls_with_bg)
+        new_labels = L2D.labels_to_draw_format(labels)
         result_saver.save(images, image_paths, new_labels)
         progbar.update(idx+1)
 
@@ -151,21 +146,17 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     log_manager = utility.Log_manager(args)
     map_calculator = utility.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
+    L2D = utility.Labels_to_draw_format(args, args.pred_dataset_path)
     timer_test = utility.timer()
-
-    if 'sv' in args.pred_dataset_path.split('/')[-1] and 'mvcnn' not in args.pred_dataset_path.split('/')[-1]:
-        num2cls_with_bg = args.sv_num2cls_with_bg 
-    else :
-        num2cls_with_bg = args.num2cls_with_bg 
-
 
     progbar = generic_utils.Progbar(len(gt_dataloader))
     for idx in range(len(gt_dataloader)):
+    #for idx in range(len(pred_dataloader)):
         _, gt_labels, _, _, _, _  = gt_dataloader[idx]
         _, pred_labels, _, _, _, _  = pred_dataloader[idx]
 
         gt_batch = sv_gt_batch_generator.get_gt_batch(gt_labels)
-        all_dets = utility.labels_to_draw_format(pred_labels, args.num_cam, num2cls_with_bg)
+        all_dets = L2D.labels_to_draw_format(pred_labels)
  
         for cam_idx in range(args.num_valid_cam) : 
             dets = all_dets[cam_idx]

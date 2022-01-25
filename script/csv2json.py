@@ -30,10 +30,12 @@ if __name__ == '__main__' :
             jm.insert_cam(scene_num, cam_num)
             jm.insert_path(scene_num, cam_num, filename_with_ext)
 
-        inst_id = jm.get_number_of_insts(scene_num, cam_num) + 1
+        #inst_id = jm.get_number_of_insts_in_cam(scene_num, cam_num) + 1
+        inst_id = jm.get_number_of_insts_in_instance_summary(scene_num) + 1
         jm.insert_instance(scene_num, cam_num, inst_id, cls_idx, x1, y1, x2, y2, prob) 
-        if not jm.is_inst_in_instance_summary(scene_num, inst_id) : 
-           jm.insert_instance_summary(scene_num, inst_id, 100) 
+        #if not jm.is_inst_in_instance_summary(scene_num, inst_id) : 
+        #   jm.insert_instance_summary(scene_num, inst_id, 100) 
+        jm.insert_instance_summary(scene_num, inst_id, cls_idx) 
     jm.sort()
     jm.save()
 
