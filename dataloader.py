@@ -38,7 +38,7 @@ class DATALOADER :
         self.image_dataloader = IMAGE_DATALOADER(self.img_path_list, self.batch_size, self.resized_width, self.resized_height, self.num_valid_cam)
 
         if self.mode == 'train' or self.mode == 'val' or self.mode == 'val_models' or self.mode == 'draw_json':
-            self.resized_instance_list = self.get_instance_list(data, self.width, self.height, self.resized_width, self.resized_height)#Y
+            self.resized_instance_list = self.get_instance_list(dataset_path, data, self.width, self.height, self.resized_width, self.resized_height)#Y
             self.label_dataloader = BASE_DATALOADER(self.resized_instance_list, self.batch_size)
 
         if self.mode == 'save_rpn_feature' or self.mode == 'save_ven_feature' or self.mode == 'demo' or self.mode == 'draw_json':
@@ -84,14 +84,16 @@ class DATALOADER :
             extrins_list_of_list.append(extrins_list)
         return extrins_list_of_list
 
-    def get_instance_list(self, json, width, height, resized_width, resized_height):
+    def get_instance_list(self, dataset_path, json, width, height, resized_width, resized_height):
+        filename = dataset_path.split('/')[-1]
+        is_class_minus_one = (self.args.dataset == 'MESSYTABLE' and filename in ['train.json', 'val.json', 'test.json']) 
         zoom_in_w = resized_width / float(width)
         zoom_in_h = resized_height / float(height)
         resized_instance_list = []
         for scene_content in list(json['scenes'].values()):
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
-                if self.args.dataset == 'MESSYTABLE' : cls -= 1
+                if is_class_minus_one: cls -= 1
                 resized_instance_dict[instance_num] = {'cls':cls, 'instance_num':instance_num, 'resized_box':{}, 'prob':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
                     cam_num = int(cam_num)

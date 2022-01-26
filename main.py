@@ -121,7 +121,7 @@ def demo(args, model, img_preprocessor, dataloader):
 def draw_json(args, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     result_saver = utility.Result_saver(args)
-    L2D = utility.Labels_to_draw_format(args, args.dataset_path)
+    L2D = utility.Labels_to_draw_format(args)
 
     for idx in range(len(dataloader)):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
@@ -146,12 +146,12 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     log_manager = utility.Log_manager(args)
     map_calculator = utility.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
-    L2D = utility.Labels_to_draw_format(args, args.pred_dataset_path)
+    L2D = utility.Labels_to_draw_format(args)
     timer_test = utility.timer()
 
     progbar = generic_utils.Progbar(len(gt_dataloader))
-    for idx in range(len(gt_dataloader)):
-    #for idx in range(len(pred_dataloader)):
+    #for idx in range(len(gt_dataloader)):
+    for idx in range(len(pred_dataloader)):
         _, gt_labels, _, _, _, _  = gt_dataloader[idx]
         _, pred_labels, _, _, _, _  = pred_dataloader[idx]
 
@@ -176,11 +176,11 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     cur_map = map_calculator.get_map()
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
-    log_manager.write_log('iou: {:.3f}'.format(iou_avg))
+    log_manager.write_log('mAP\t%.4f'%(cur_map))
+    log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
+    log_manager.write_log('Runtime(s)\t{:.2f}\n'.format(timer_test.toc()))
     for cls, prob in all_ap_dict.items():
         log_manager.write_log('%s\t%.4f'%(cls, prob))
-    log_manager.write_log('mAP\t%.4f'%(cur_map))
-    log_manager.write_log('Runtime: {:.2f}s\n'.format(timer_test.toc()))
     return cur_map
 
 

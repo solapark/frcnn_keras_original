@@ -1101,16 +1101,8 @@ def get_value_in_pattern(text, pattern):
     return re.findall(pattern, text)[0]
 
 class Labels_to_draw_format :
-    def __init__(self, args, dataset_path):
-        filename = dataset_path.split('/')[-1]
-        if ('log' in filename or 'sv' in filename) and 'mvcnn' not in filename:
-            self.num2cls_with_bg = args.sv_num2cls_with_bg 
-        else :
-            self.num2cls_with_bg = args.num2cls_with_bg 
-
-        if filename not in ['train.json', 'val.json', 'test.json'] :
-            self.num2cls_with_bg = {k-1 : v for (k, v) in self.num2cls_with_bg.items()}
-
+    def __init__(self, args):
+        self.num2cls_with_bg = args.num2cls_with_bg.copy() 
         self.num_cam = args.num_cam
 
     def labels_to_draw_format(self, labels):
