@@ -543,7 +543,7 @@ class Map_calculator:
     def get_aps(self):
         all_aps = [average_precision_score(t, p) if len(t) else 0 for t, p in zip(self.all_T.values(), self.all_P.values())]
         #all_aps = [ap if not math.isnan(ap) else 0 for ap in all_aps]
-        #all_aps = [0 if ap == 1.0 else ap for ap in all_aps]
+        all_aps = [0 if ap == 1.0 else ap for ap in all_aps]
         self.all_aps = all_aps
         return all_aps
 

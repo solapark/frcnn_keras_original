@@ -87,6 +87,7 @@ class DATALOADER :
     def get_instance_list(self, dataset_path, json, width, height, resized_width, resized_height):
         filename = dataset_path.split('/')[-1]
         is_class_minus_one = (self.args.dataset == 'MESSYTABLE' and filename in ['train.json', 'val.json', 'test.json']) 
+        #is_class_minus_one = (self.args.dataset == 'MESSYTABLE' and filename in ['train.json', 'val.json', 'test.json', 'tmp.json']) 
         zoom_in_w = resized_width / float(width)
         zoom_in_h = resized_height / float(height)
         resized_instance_list = []
