@@ -1169,7 +1169,7 @@ class Json_writer :
             for det in dets:
                 x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
 
-                x1, y1, x2, y2 = [int(p/self.args.resize_ratio) for p in [x1, y1, x2, y2]]
+                x1, y1, x2, y2 = [round(p/self.args.resize_ratio) for p in [x1, y1, x2, y2]]
                 cls_idx = self.class_mapping[cls] 
                 self.jm.insert_instance(scene_num, cam_num, inst_idx, cls_idx, x1, y1, x2, y2, prob) 
                 self.jm.insert_instance_summary(scene_num, inst_idx, cls_idx)

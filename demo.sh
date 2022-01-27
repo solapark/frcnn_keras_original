@@ -80,3 +80,28 @@ CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode val_models --dataset MESSYTA
 
 #demo 341
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model_341 --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model/model_341.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --max_dist_epiline_to_box .05
+
+
+-----------------------------------------------------------
+#svdet#
+
+# val svdet and generate csv file (log.csv)
+cd ~/frcnn_keras
+
+CUDA_VISIBLE_DEVICES=3 python -m pdb test.py  --save_name sv_messytable_cam3_resume --test_path /data1/sap/MessyTable/labels/test_3cam.txt --model_idx 110 --val --progbar --log_output
+
+# conver svdet csv to json(log.json)
+python script/csv2json.py --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.csv --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json
+
+# val svdet log.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/test_3cam --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json
+
+# generate svdet.json (assign gt inst id to svdet result)
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
+
+# draw svdet.json
+*draw svdet.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
+-------------------------------------------------------------
+
+

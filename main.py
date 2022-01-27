@@ -87,11 +87,13 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     cur_map = map_calculator.get_map()
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
-    log_manager.write_log('iou: {:.3f}'.format(iou_avg))
+    log_manager.write_log('mAP\t%.4f'%(cur_map))
+    log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
+    log_manager.write_log('Runtime(s)\t{:.2f}'.format(timer_test.toc()))
     for cls, prob in all_ap_dict.items():
         log_manager.write_log('%s\t%.4f'%(cls, prob))
-    log_manager.write_log('mAP\t%.4f'%(cur_map))
-    log_manager.write_log('Runtime: {:.2f}s\n'.format(timer_test.toc()))
+    log_manager.write_log('\n')
+
     return cur_map
 
 def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
