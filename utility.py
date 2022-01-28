@@ -6,6 +6,7 @@ import re
 import math
 import cv2
 import pickle
+import copy
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -1069,23 +1070,54 @@ class Result_saver :
         np.random.seed(0)
         self.colors = np.random.randint(0, 255, (args.num_cls_with_bg, 3)).tolist()
 
+
     def save(self, X, img_paths, all_dets):
+        if self.args.draw_inst_by_inst : 
+            self.save_inst_by_inst(X, img_paths, all_dets)
+        else :
+            self.save_whole_inst(X, img_paths, all_dets)
+
+    def save_whole_inst(self, X, img_paths, all_dets):
         save_path = self.get_general_file_name(img_paths)
         img_list = [x[0] for x in X]
         for cam_idx in range(self.args.num_valid_cam): 
             dets = all_dets[cam_idx]
             for det in dets:
                 x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
-                cls_idx = self.args.cls2num[cls]
+                cls_idx = self.args.cls2num_with_bg[cls]
                 #det_color = self.colors[cls_idx]
                 det_color = self.colors[inst_idx]
 
-                #x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
                 prob = round(prob, 2)
                 img_list[cam_idx] = draw_inst(img_list[cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
                 #break
         conc_img = get_concat_img(img_list)
         cv2.imwrite(save_path, conc_img)
+
+    def save_inst_by_inst(self, X, img_paths, all_dets):
+        save_path = self.get_general_file_name(img_paths)
+        img_list = [x[0] for x in X]
+        img_dict = dict()
+        for cam_idx in range(self.args.num_valid_cam): 
+            dets = all_dets[cam_idx]
+            for det in dets:
+                x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
+                cls_idx = self.args.cls2num_with_bg[cls]
+                #det_color = self.colors[cls_idx]
+                det_color = self.colors[inst_idx]
+
+                prob = round(prob, 2)
+
+                if not inst_idx in img_dict :
+                    img_dict[inst_idx] = copy.deepcopy(img_list)
+
+                img_dict[inst_idx][cam_idx] = draw_inst(img_dict[inst_idx][cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
+                #break
+
+        for inst_idx, img_list in img_dict.items() :
+            conc_img = get_concat_img(img_list)
+            save_path_with_inst_idx = self.get_general_file_name_with_inst_idx(save_path, inst_idx)
+            cv2.imwrite(save_path_with_inst_idx, conc_img)
  
     def get_general_file_name(self, img_paths):
         base_name = os.path.basename(list(img_paths[0].values())[0])
@@ -1093,6 +1125,12 @@ class Result_saver :
             general_name = get_value_in_pattern(base_name, '(.*)-0[0-9].jpg')
         general_path = os.path.join(self.result_img_save_dir, general_name+'.jpg')
         return general_path
+
+    def get_general_file_name_with_inst_idx(self, save_path, inst_idx):
+        if(self.args.dataset == 'MESSYTABLE'):
+            general_path = get_value_in_pattern(save_path, '(.*).jpg')
+            general_path_inst_idx = general_path + '_' + str(inst_idx) + '.jpg'
+        return general_path_inst_idx
 
 def get_value_in_pattern(text, pattern):
     #pattern = 'aaa_(.*)'
@@ -1119,8 +1157,8 @@ class Labels_to_draw_format :
         for i, inst in enumerate(src) :
             instance_num = int(inst['instance_num'])
             cls = self.num2cls_with_bg[inst['cls']]
-            if cls == 'bg' :
-                continue
+            #if cls == 'bg' :
+            #    continue
 
             boxes_all_cam = inst['resized_box']
             probs_all_cam = inst['prob']

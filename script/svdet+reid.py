@@ -113,6 +113,7 @@ if __name__ == '__main__' :
             for (k, v) in matching.items():
                 G.add_edge(k, v)
 
+        '''
         reids = []
         for src_node in G.nodes():
             src_cam_idx, _ = split_id(src_node)
@@ -149,7 +150,40 @@ if __name__ == '__main__' :
 
                 if is_valid :
                     reids.append(cur_reid)
+        '''
                 
+        #2. Generate all simple paths in G from all nodes to all nodes. A simple path is a path with no repeated nodes.
+        paths = set()
+        for src_node in G.nodes():
+            src_cam_idx, _ = split_id(src_node)
+            for dst_node in G.nodes() :
+                dst_cam_idx, _= split_id(dst_node)
+                if not src_cam_idx == dst_cam_idx :
+                    simple_paths = nx.all_simple_paths(G, source=src_node, target=dst_node)  
+                    simple_paths = {frozenset(path) for path in simple_paths}
+                    #print(simple_paths)
+                    paths = paths.union(simple_paths)
+                    
+        #3. Remove invalid(remove invalid connection. ex) 1_1 - 2_1 - 1-2 - 3-1 ).
+        to_remove = []
+        for path in paths :
+            cam_id_list = [split_id(node)[0] for node in path]
+            if len(cam_id_list) != len(set(cam_id_list)):
+                to_remove.append(path)
+        
+        for path in to_remove :
+            paths.remove(path)
+
+        #4. Remove subset(Find longest path).
+        longest_paths = paths.copy()
+        for p1 in paths :
+            for p2 in longest_paths :
+                if p1 < p2 :
+                    longest_paths.remove(p1)
+                    break
+        reids = longest_paths
+
+        #5. Insert reid results.
         dst_json.insert_scene(scene_name)
         for cam_idx in range(1, num_cam+1) :
             cam_idx = str(cam_idx)
@@ -169,43 +203,3 @@ if __name__ == '__main__' :
                 dst_json.insert_instance(scene_name, cam_idx, new_inst_id, cls, x1, y1, x2, y2, prob)
         
     dst_json.save()
-
-
-
-    '''
-    for scene in scenes :
-        for cam_pair in cam_pairs :
-            for inst_pair in inst_pairs :
-                if score > 0.5 :
-                    add to bipar graph
-            add bipar_graph_matching_pairs to graph
-
-        reid = []
-        for v in V of graph :
-            dfs = dfs(v)
-            for branch in dfs :
-                mask = [0, 0, 0]
-                mask[cam_idx of v] = 1
-                cur_reid = {}
-                for box in branch :
-                    if not mask :
-                        cur_reid.add(cam_idx of box)
-                        mask[cam_idx of box] = 1
-                    else :
-                        break
-
-                for r in reid :
-                    intersection = r and cur_reid  
-                    if intersection == cur_reid :
-                        continue
-                    elif intersection == r :
-                        reid.remove(r)
-                        reid.add(cur_reid)
-                    else : 
-                        reid.add(cur_reid)
-
-        for i, r in enumerate(reid) :
-            add_instance 
-            for box in r :
-                add_inst(box)
-    '''

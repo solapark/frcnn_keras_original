@@ -118,6 +118,9 @@ parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0,
 parser.add_argument('--classifier_max_overlap', type=float, default=.4, help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='threshold for negative sample')
 
+#drawing
+parser.add_argument("--draw_inst_by_inst", help="draw one inst in one image.", action="store_true", default=False)
+
 args = parser.parse_args()
 
 if(args.mode == 'train' and  args.resume == args.reset):
