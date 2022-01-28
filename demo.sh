@@ -102,6 +102,18 @@ python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/
 # draw svdet.json
 *draw svdet.json
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
--------------------------------------------------------------
 
+-------------------------------------------------------------
+#val model on test.josn#
+
+# val
+CUDA_VISIBLE_DEVICES=3 python -m pdb main.py --mode val --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning --dataset_path /data1/sap/MessyTable/labels/test.json --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model/model_80.hdf5 --is_use_epipolar
+
+# write json
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning  --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model/model_80.hdf5 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/test_model_80.json --is_use_epipolar 
+
+# val_json_json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/test_model_80.json
+
+-------------------------------------------------------------
 
