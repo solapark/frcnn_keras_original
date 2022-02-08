@@ -28,8 +28,10 @@ if __name__ == '__main__' :
             cls_cnt = np.zeros((args.num_cls+1, ))
             cls_list = np.zeros((args.num_cam+1, ))
             prob_list = np.zeros((args.num_cam+1, ))
+            num_valid_cam = 0
             for cam_idx in cam_ids :
                 if dst_json.is_inst_in_cam(scene_name, cam_idx, inst_id) :
+                    num_valid_cam += 1
                     cls = dst_json.get_inst_cls(scene_name, cam_idx, inst_id)
                     cls_cnt[cls] += 1
                     cls_list[int(cam_idx)] = cls
@@ -41,8 +43,10 @@ if __name__ == '__main__' :
 
             majority_clss = np.where(cls_cnt==np.max(cls_cnt))
             majority_cls = np.random.choice(majority_clss[0], 1)[0]
-            majority_prob = np.mean(prob_list[cls_list == majority_cls])
+            #majority_prob = np.mean(prob_list[cls_list == majority_cls])
+            majority_prob = np.sum(prob_list[cls_list == majority_cls])/num_valid_cam
             majority_cls = majority_cls.item()
+            #print(prob_list, majority_cls, majority_prob)
             dst_json.insert_instance_summary(scene_name, inst_id, majority_cls)
 
             for cam_idx in cam_ids :  
