@@ -112,46 +112,7 @@ if __name__ == '__main__' :
             matching = bi_G.match()
             for (k, v) in matching.items():
                 G.add_edge(k, v)
-
-        '''
-        reids = []
-        for src_node in G.nodes():
-            src_cam_idx, _ = split_id(src_node)
-            reid_cands = []
-            for dst_node in G.nodes() :
-                dst_cam_idx, _= split_id(dst_node)
-                if not src_cam_idx == dst_cam_idx :
-                    all_paths = nx.all_simple_paths(G, source=src_node, target=dst_node)  
-                    for path in all_paths :
-                        reid_cands.append(path)
-
-            #reid_cands = [['1_1', '2_1'], ['1_1', '3_1', '2_1'], ['1_1', '2_1', '3_1'], ['1_1', '3_1']]
-            #final = ['1_1', '2_1', '3_1']
-            for reid_cand in reid_cands : 
-                is_cam_visited = np.zeros((num_cam, ))
-                cur_reid = set()
-                for id in reid_cand :
-                    cam_idx, _ = split_id(id)
-                    if not is_cam_visited[int(cam_idx)-1] :
-                        cur_reid.add(id)
-                        is_cam_visited[int(cam_idx)-1] = 1
-                    else :
-                        break
-
-                is_valid = True
-                for r in reids :
-                    if r >= cur_reid:
-                        is_valid = False
-                        break
-
-                    elif r < cur_reid :
-                        reids.remove(r)
-                        break
-
-                if is_valid :
-                    reids.append(cur_reid)
-        '''
-                
+               
         #2. Generate all simple paths in G from all nodes to all nodes. A simple path is a path with no repeated nodes.
         paths = set()
         for src_node in G.nodes():
@@ -164,7 +125,7 @@ if __name__ == '__main__' :
                     #print(simple_paths)
                     paths = paths.union(simple_paths)
                     
-        #3. Remove invalid(remove invalid connection. ex) 1_1 - 2_1 - 1-2 - 3-1 ).
+        #3. Remove invalid(remove path with repeated cameras. ex) 1_1 - 2_1 - 1-2 - 3-1 ).
         to_remove = []
         for path in paths :
             cam_id_list = [split_id(node)[0] for node in path]
