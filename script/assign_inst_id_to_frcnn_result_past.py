@@ -38,25 +38,42 @@ from json_maker import json_maker
 
 import argparse 
 
-def add_alias_matching(matching, pred_insts) :
-    alias = dict()
-    for pred_inst in pred_insts :
-        target_id_in_G = 'pred_'+ pred_inst['inst_id']
-        target_pos = pred_inst['pos']
-        cur_alias = []
-        for pred_inst in pred_insts :
-            alias_id_in_G = 'pred_'+ pred_inst['inst_id']
-            alias_pos = pred_inst['pos']
-            if target_id_in_G != alias_id_in_G and target_pos == alias_pos :
-                cur_alias.append(alias_id_in_G)
-        alias[target_id_in_G] = cur_alias
-                        
-    new_matching = matching.copy()
-    for pred_id, gt_id in matching.items() : 
-        for alias_id in alias[pred_id] :
-            new_matching[alias_id] = gt_id
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log_with_gt_inst_id.json'
 
-    return new_matching
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/classification_majority.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/classification_majority.json'
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/classification_mvcnn.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/classification_mvcnn.json'
+#src_path = '/data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model_341.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341.json'
+#src_path = '/data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model_80.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning_model_80.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+asnet.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+triplenet.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+asnet+majority.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+asnet+majority+nms.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+mvcnn.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+asnet+mvcnn.json'
+
+#src_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+mvcnn+nms.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/svdet+asnet+mvcnn+nms.json'
+
+#src_path = '/data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model_80.json'
+#dst_path = '/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/for_reid_validatioin/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning_model_80.json'
+
+#gt_path = '/data1/sap/MessyTable/labels/test.json'
+
+#resize_ratio = 0.5555555555555556
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
@@ -118,8 +135,6 @@ if __name__ == '__main__' :
             matching = G.match()
             matching = [sorted([k, v], reverse=True) for (k, v) in matching.items()]
             matching = {l[0]:l[1] for l in matching}
-            matching = add_alias_matching(matching, pred_insts)
-
             for pred_inst in pred_insts :
                 pred_id = pred_inst['inst_id']
                 pred_id_in_G = 'pred_' + pred_id
@@ -132,10 +147,10 @@ if __name__ == '__main__' :
                 else :
                     dst_inst_id = str(new_id)
                     new_id += 1
-                dst_json.insert_instance(scene_id, cam_id, pred_id, subcls, x1, y1, x2, y2, prob)
-                dst_json.insert_gt_id(scene_id, cam_id, pred_id, dst_inst_id)
-                if not dst_json.is_inst_in_instance_summary(scene_id, pred_id) : 
-                    dst_json.insert_instance_summary(scene_id, pred_id, 100)
+                dst_json.insert_instance(scene_id, cam_id, dst_inst_id, subcls, x1, y1, x2, y2, prob)
+                dst_json.insert_pred_id(scene_id, cam_id, dst_inst_id, pred_id)
+                if not dst_json.is_inst_in_instance_summary(scene_id, dst_inst_id) : 
+                    dst_json.insert_instance_summary(scene_id, dst_inst_id, 100)
 
     dst_json.sort()
     dst_json.save()

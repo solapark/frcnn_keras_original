@@ -68,6 +68,9 @@ class json_maker :
         prob = float(prob) if prob else None
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst] = {'subcls' : cls, 'pos': [x1, y1, x2, y2], 'prob':prob}
 
+    def insert_gt_id(self, scene, cam, inst, gt_id) :
+        self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['gt_id'] = gt_id
+
     def insert_pred_id(self, scene, cam, inst, pred_id) :
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['pred_id'] = pred_id
 
