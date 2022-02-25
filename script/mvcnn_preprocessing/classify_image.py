@@ -40,8 +40,6 @@ if __name__ == '__main__' :
 
 
     for imgpath in tqdm(img_path):
-        img = cv2.imread(imgpath)
-        img_resized = cv2.resize(img,(256,256))
         subcls = imgpath.split('_')[1].split('.')[0] #string type
         #subcls_name = subcls_name_dict[int(subcls)]
         subcls_name = new_subcls_dict[int(subcls)]
@@ -53,7 +51,15 @@ if __name__ == '__main__' :
 
         full_save_path = options.save_path + '/' + subcls_name + '/'+options.set+'/' + imgpath.rsplit('-',2)[0].split('/')[-1]+'-'+subcls_name+'-'+instance +'_' + str(view_num)
         createDirectory(options.save_path+ '/' +  subcls_name+'/'+options.set)
-        cv2.imwrite(full_save_path+'.png',img_resized)
+
+        #img = cv2.imread(imgpath)
+        #img_resized = cv2.resize(img,(256,256))
+        #cv2.imwrite(full_save_path+'.png',img_resized)
+
+        src = imgpath
+        dst = full_save_path+'.png'
+        os.symlink(src, dst) 
+
         #print('{0} is saved'.format(full_save_path+'.png'))
         num_img = num_img+1
 

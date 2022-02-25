@@ -42,5 +42,6 @@ if __name__ == '__main__' :
                 save_path = os.path.join(args.save_dir, save_name)
 
                 cropped_img = img[y1: y2, x1: x2]
+                cropped_img = cv2.resize(cropped_img,(256,256))
 
                 cv2.imwrite(save_path, cropped_img)
