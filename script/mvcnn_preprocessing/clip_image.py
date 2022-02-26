@@ -26,6 +26,7 @@ if __name__ == '__main__' :
     for scene_num in tqdm(all_scene_nums) :
         scene = json.get_scene(scene_num)
         cam_ids = json.get_all_cams(scene) 
+        instance_summary = json.get_instance_summary(scene_num)
  
         for cam_id in cam_ids :
             cam = scene['cameras'][cam_id]
@@ -35,10 +36,10 @@ if __name__ == '__main__' :
 
             for inst in instances:
                 inst_id = inst['inst_id']
-                subcls = inst['subcls']
                 x1, y1, x2, y2 = map(int, inst['pos'])
 
-                save_name = '%s-%d-%d_%d.jpg' %(scene_num, int(cam_id), int(inst_id), int(subcls))
+                #save_name = '%s-%d-%d_%d.jpg' %(scene_num, int(cam_id), int(inst_id), int(subcls))
+                save_name = '%s-%d-%d_10.jpg' %(scene_num, int(cam_id), int(inst_id))
                 save_path = os.path.join(args.save_dir, save_name)
 
                 cropped_img = img[y1: y2, x1: x2]
