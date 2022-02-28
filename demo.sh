@@ -90,14 +90,14 @@ cd ~/frcnn_keras
 
 CUDA_VISIBLE_DEVICES=3 python -m pdb test.py  --save_name sv_messytable_cam3_resume --test_path /data1/sap/MessyTable/labels/test_3cam.txt --model_idx 110 --val --progbar --log_output
 
-# conver svdet csv to json(log.json)
+# convert svdet csv to json(log.json)
 python script/csv2json.py --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.csv --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json
 
-# val svdet log.json
+# val log.json
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/test_3cam --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json
 
-# generate svdet.json (assign gt inst id to svdet result)
-python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
+# generate svdet.json (assign gt inst id to svdet result to eval reid performance)
+python script/assign_inst_id_to_frcnn_result_past.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
 
 # draw svdet.json
 *draw svdet.json
@@ -116,4 +116,144 @@ CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode write_json --dataset MESSYTA
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/test_model_80.json
 
 -------------------------------------------------------------
+###how to deal with asnet network
+[train asnet]
+#train asnet on cam3 messytable
+CUDA_VISIBLE_DEVICES=3 python -m pdb train.py --config_dir asnet
+
+[generate result_img_pairs]
+#test asnet on test.json
+cp -r asnet gt+asnet
+
+CUDA_VISIBLE_DEVICES=3 python test.py --config_dir gt+asnet --eval_json /data1/sap/MessyTable/labels/test.json --save_features --eval_model
+CUDA_VISIBLE_DEVICES=3 python test.py --config_dir gt+asnet --eval_json /data1/sap/MessyTable/labels/test.json --save_features --eval_model_esc
+
+#test asnet on svdet.json
+cp -r asnet svdet+asnet
+
+CUDA_VISIBLE_DEVICES=0 python test.py --config_dir svdet+asnet --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json  --save_features  --eval_model
+CUDA_VISIBLE_DEVICES=0 python test.py --config_dir svdet+asnet --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json --save_features  --eval_model_esc
+
+[reid]
+python script/svdet+reid.py --reid_img_pairs_path /data3/sap/Messytable/models/svdet+asnet/results_img_pairs.json --src_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json --dst_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json
+
+[majority]
+python script/svdet+reid+majority.py --src /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json --dst /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
+
+[nms]
+python script/nms.py --src /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json --dst /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json
+
+
+[eval reid]
+assign gt id
+#majority
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
+
+#nms
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json
+
+cp dir
+#majority
+cp -r /data3/sap/Messytable/models/asnet /data3/sap/Messytable/models/svdet+asnet+majority
+
+#nms
+cp -r /data3/sap/Messytable/models/asnet /data3/sap/Messytable/models/svdet+asnet+majority+nms
+
+run test.py
+#majority
+CUDA_VISIBLE_DEVICES=-1 python test.py --config_dir svdet+asnet+majority --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json  --eval_frcnn
+
+#nms
+CUDA_VISIBLE_DEVICES=-1 python test.py --config_dir svdet+asnet+majority+nms --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json  --eval_frcnn
+
+
+[eval map]
+#majority
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/svdet+asnet+majority.json --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
+
+#nms
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/svdet+asnet+majority+nms.json --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json
+
+
+================================
+###how to deal with triplenet network
+[train triplenet]
+#train triplenet on cam3 messytable
+CUDA_VISIBLE_DEVICES=3 python -m pdb train.py --config_dir triplenet
+
+[generate result_img_pairs]
+#test triplenet on test.json
+cp -r triplenet gt+triplenet
+
+CUDA_VISIBLE_DEVICES=3 python test.py --config_dir gt+triplenet --eval_json /data1/sap/MessyTable/labels/test.json --save_features --eval_model
+CUDA_VISIBLE_DEVICES=3 python test.py --config_dir gt+triplenet --eval_json /data1/sap/MessyTable/labels/test.json --save_features --eval_model_esc
+
+#test triplenet on svdet.json
+cp -r triplenet svdet+triplenet
+
+CUDA_VISIBLE_DEVICES=0 python test.py --config_dir svdet+triplenet --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json  --save_features  --eval_model
+CUDA_VISIBLE_DEVICES=0 python test.py --config_dir svdet+triplenet --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json --save_features  --eval_model_esc
+
+[reid]
+python script/svdet+reid.py --reid_img_pairs_path /data3/sap/Messytable/models/svdet+triplenet/results_img_pairs.json --src_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json --dst_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet.json
+
+[majority]
+python script/svdet+reid+majority.py --src /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet.json --dst /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json
+
+[nms]
+python script/nms.py --src /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json --dst /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json
+
+
+[eval reid]
+assign gt id
+#majority
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json
+
+#nms
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json
+
+cp dir
+#majority
+cp -r /data3/sap/Messytable/models/triplenet /data3/sap/Messytable/models/svdet+triplenet+majority
+
+#nms
+cp -r /data3/sap/Messytable/models/triplenet /data3/sap/Messytable/models/svdet+triplenet+majority+nms
+
+run test.py
+#majority
+CUDA_VISIBLE_DEVICES=-1 python test.py --config_dir svdet+triplenet+majority --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json  --eval_frcnn
+
+#nms
+CUDA_VISIBLE_DEVICES=-1 python test.py --config_dir svdet+triplenet+majority+nms --eval_json /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json  --eval_frcnn
+
+
+[eval map]
+#majority
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/svdet+triplenet+majority.json --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json
+
+#nms
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/svdet+triplenet+majority+nms.json --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json
+
+===================================================
+[draw]
+#draw svdet
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
+
+#draw svdet+asnet.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+asnet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json
+
+#draw svdet+asnet+majority.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+asnet+majority.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
+
+#draw svdet+asnet+majority+nms.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+asnet+majority+nms.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json
+
+#draw svdet+triplenet.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+triplenet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet.json
+
+#draw svdet+triplenet+majority.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+triplenet+majority.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority.json
+
+#draw svdet+triplenet+majority+nms.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+triplenet+majority+nms.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json
 

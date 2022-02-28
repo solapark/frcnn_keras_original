@@ -261,7 +261,7 @@ class MV_FRCNN:
         offset = 2 if self.args.mode == 'train' else 4
 
         P_rpn = self.model_rpn.predict_on_batch(list(X))
-        utility.pickle_save('mv_rpn.pickle', P_rpn[:2])
+        #utility.pickle_save('mv_rpn.pickle', P_rpn[:2])
 
         rois = [tmp.rpn_to_roi(P_rpn[i*offset], P_rpn[i*offset+1], self.args, K.common.image_dim_ordering(), use_regr=True, overlap_thresh=0.7, max_boxes = self.args.num_nms) for i in range(self.args.num_valid_cam)]
 

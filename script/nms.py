@@ -11,8 +11,8 @@ np.random.seed(0)
 if __name__ == '__main__' :
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--src_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json')
-    parser.add_argument('--dst_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json')
+    parser.add_argument('--src', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json')
+    parser.add_argument('--dst', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority+nms.json')
     parser.add_argument('--num_cam', type=int, default=3)
     parser.add_argument('--nms_thresh', type=float, default=.3)
 
@@ -20,12 +20,12 @@ if __name__ == '__main__' :
 
     cam_ids = [str(i+1) for i in range(args.num_cam)]
 
-    src_json = json_maker([], args.src_json_path, args.num_cam)
+    src_json = json_maker([], args.src, args.num_cam)
     src_json.load()
 
-    dst_json = json_maker([], args.src_json_path, args.num_cam)
+    dst_json = json_maker([], args.src, args.num_cam)
     dst_json.load()
-    dst_json.path = args.dst_json_path
+    dst_json.path = args.dst
 
     scene_name_list = src_json.get_all_scenes()
 

@@ -9,8 +9,8 @@ np.random.seed(0)
 
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
-    parser.add_argument('--src_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json')
-    parser.add_argument('--dst_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json')
+    parser.add_argument('--src', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json')
+    parser.add_argument('--dst', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json')
     parser.add_argument('--num_cam', type=int, default=3)
     parser.add_argument('--num_cls', type=int, default=121)
 
@@ -18,7 +18,7 @@ if __name__ == '__main__' :
 
     cam_ids = [str(i+1) for i in range(args.num_cam)]
 
-    dst_json = json_maker([], args.src_json_path, 0)
+    dst_json = json_maker([], args.src, 0)
     dst_json.load()
 
     scene_name_list = dst_json.get_all_scenes()
@@ -54,5 +54,5 @@ if __name__ == '__main__' :
                     dst_json.change_cls_in_cam(scene_name, cam_idx, inst_id, majority_cls)
                     dst_json.change_prob_in_cam(scene_name, cam_idx, inst_id, majority_prob)
 
-    dst_json.path = args.dst_json_path
+    dst_json.path = args.dst
     dst_json.save()

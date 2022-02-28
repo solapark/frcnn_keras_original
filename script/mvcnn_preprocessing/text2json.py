@@ -22,7 +22,8 @@ if __name__ == '__main__' :
         line = line.strip()
         scene_name = line.rsplit('-',2)[0].rsplit('/',1)[-1]
         instance_name = line.rsplit('-',1)[-1].split(',')[0]
-        pred = line.split(',')[-1]
+        pred = line.split(',')[-2]
+        prob = line.split(',')[-1]
         index = image_list.index(scene_name)
 
         if pred == '120' :
@@ -39,6 +40,7 @@ if __name__ == '__main__' :
         for cam_idx in json_data_before['scenes'][scene_name]['cameras'] :   
             if str(instance_name) in json_data_before['scenes'][scene_name]['cameras'][cam_idx]['instances'] :
                 json_data_before['scenes'][scene_name]['cameras'][cam_idx]['instances'][str(instance_name)]['subcls'] = int(pred)
+                json_data_before['scenes'][scene_name]['cameras'][cam_idx]['instances'][str(instance_name)]['prob'] = float(prob)
 
         #before_json.seek(0)
         #json.dump(json_data_before,before_json, indent = 7)

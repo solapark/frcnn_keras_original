@@ -7,6 +7,9 @@ class Simple_label :
         self.cls_list = class_list
         self.img_base_path = img_base_path
 
+        f = open(self.path,'w')
+        f.close()
+
     def write(self, list_of_list):
         list2csv(self.path, list_of_list, 'a')
 

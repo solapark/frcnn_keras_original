@@ -29,6 +29,7 @@ if __name__ == '__main__' :
         instance_summary = json.get_instance_summary(scene_num)
  
         for cam_id in cam_ids :
+            if int(cam_id) > args.num_cam : break
             cam = scene['cameras'][cam_id]
             img_name, instances = json.get_all_inst(cam)
 

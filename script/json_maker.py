@@ -42,6 +42,10 @@ class json_maker :
         if inst in self.json['scenes'][scene]['instance_summary'] : return True
         else : return False
 
+    def is_prob_in_instance(self, scene_name, cam_idx, inst_id):
+        if 'prob' in self.json['scenes'][scene_name]['cameras'][cam_idx]['instances'][inst_id] : return True
+        else : return False
+
     def get_cls_in_instance_summary(self, scene, inst):
         return self.json['scenes'][scene]['instance_summary'][inst]
 

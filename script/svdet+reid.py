@@ -160,7 +160,12 @@ if __name__ == '__main__' :
                 cam_idx, inst_id = split_id(id)
                 cls = src_json.get_inst_cls(scene_name, cam_idx, inst_id)
                 x1, y1, x2, y2 = src_json.get_inst_box(scene_name, cam_idx, inst_id)
-                prob = src_json.get_inst_prob(scene_name, cam_idx, inst_id)
+
+                if src_json.is_prob_in_instance(scene_name, cam_idx, inst_id) :
+                    prob = src_json.get_inst_prob(scene_name, cam_idx, inst_id)
+                else :
+                    prob = 1.0
+
                 dst_json.insert_instance(scene_name, cam_idx, new_inst_id, cls, x1, y1, x2, y2, prob)
         
     dst_json.save()

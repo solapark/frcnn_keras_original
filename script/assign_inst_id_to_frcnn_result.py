@@ -135,7 +135,7 @@ if __name__ == '__main__' :
                 dst_json.insert_instance(scene_id, cam_id, pred_id, subcls, x1, y1, x2, y2, prob)
                 dst_json.insert_gt_id(scene_id, cam_id, pred_id, dst_inst_id)
                 if not dst_json.is_inst_in_instance_summary(scene_id, pred_id) : 
-                    dst_json.insert_instance_summary(scene_id, pred_id, 100)
+                    dst_json.insert_instance_summary(scene_id, pred_id, subcls)
 
     dst_json.sort()
     dst_json.save()
