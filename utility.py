@@ -1075,8 +1075,7 @@ class Result_saver :
     def save(self, X, img_paths, all_dets):
         if self.args.draw_inst_by_inst : 
             self.save_inst_by_inst(X, img_paths, all_dets)
-        else :
-            self.save_whole_inst(X, img_paths, all_dets)
+        self.save_whole_inst(X, img_paths, all_dets)
 
     def save_whole_inst(self, X, img_paths, all_dets):
         save_path = self.get_general_file_name(img_paths)

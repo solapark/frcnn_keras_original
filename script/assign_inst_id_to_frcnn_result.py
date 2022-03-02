@@ -63,6 +63,7 @@ if __name__ == '__main__' :
     parser.add_argument('--gt_path', type=str, default='/data1/sap/MessyTable/labels/test.json')
     parser.add_argument('--src_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json')
     parser.add_argument('--dst_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json')
+    parser.add_argument('--num_cam', type=int, default=3)
 
     args = parser.parse_args()
 
@@ -86,6 +87,7 @@ if __name__ == '__main__' :
         scene = src_json.get_scene(scene_id)
         cam_ids = src_json.get_all_cams(scene)
         for cam_id in cam_ids :
+            if int(cam_id) > args.num_cam : break
             G = Bipartite_graph()
             dst_json.insert_cam(scene_id, cam_id)
 

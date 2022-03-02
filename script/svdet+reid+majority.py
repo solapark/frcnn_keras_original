@@ -35,7 +35,10 @@ if __name__ == '__main__' :
                     cls = dst_json.get_inst_cls(scene_name, cam_idx, inst_id)
                     cls_cnt[cls] += 1
                     cls_list[int(cam_idx)] = cls
-                    prob_list[int(cam_idx)] = dst_json.get_inst_prob(scene_name, cam_idx, inst_id)
+                    if dst_json.is_prob_in_instance(scene_name, cam_idx, inst_id) :
+                        prob_list[int(cam_idx)] = dst_json.get_inst_prob(scene_name, cam_idx, inst_id)
+                    else :
+                        prob_list[int(cam_idx)] = 1.0
 
             #if len(np.where(cls_cnt)[0]) != 1 : 
             #    print(scene_name, inst_id)
