@@ -117,7 +117,10 @@ class json_maker :
     def get_inst_prob(self, scene_name, cam_idx, inst_id):
         return self.json['scenes'][scene_name]['cameras'][cam_idx]['instances'][inst_id]['prob']
 
-    def get_all_inst(self, cam):
+    def get_all_insts_in_cam(self, scene_id, cam_id):
+        return self.json['scenes'][scene_id]['cameras'][cam_id]['instances']
+
+    def get_all_inst(self, cam, thresh=0):
         path_name = cam['pathname']
         instances = cam['instances']
         inst_dict_list = []
@@ -125,6 +128,8 @@ class json_maker :
             subcls = inst_info['subcls']
             pos = inst_info['pos']
             prob= inst_info['prob'] if 'prob' in inst_info else 1
+            if prob < thresh :
+                continue
             inst_dict = {'inst_id' : inst_id, 'subcls' : subcls, 'pos' : pos, 'prob':prob}
             inst_dict_list.append(inst_dict)
         return path_name, inst_dict_list

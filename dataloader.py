@@ -20,12 +20,12 @@ class DATALOADER :
         self.cls2num = args.cls2num
         self.base_dir = args.base_dir
         self.dataset = args.dataset
+        self.mode = mode
         self.img_dir = args.messytable_img_dir if args.dataset == 'MESSYTABLE' else None
         self.demo_file = args.demo_file
         self.width, self.height = args.width, args.height
-        self.resized_width, self.resized_height = args.resized_width, args.resized_height
+        self.resized_width, self.resized_height = (args.resized_width, args.resized_height) if (self.mode != 'val') else (self.width, self.height)
 
-        self.mode = mode
         self.shuffle = True if(self.mode == 'train') else False
         #self.shuffle = False
 

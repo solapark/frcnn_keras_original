@@ -7,6 +7,7 @@ if __name__ == '__main__' :
     parser=argparse.ArgumentParser()
     parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/test.json')
     parser.add_argument('--simple_label_path', default= '/data1/sap/MessyTable/labels/test.txt')
+    parser.add_argument('--save_image_by_image', action='store_true')
     parser.add_argument('--img_base_path', default = '/data1/sap/MessyTable/images')
     parser.add_argument('--num_cam', type=int, default = 3)
 

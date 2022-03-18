@@ -1,5 +1,6 @@
 from option import args
 from model import Model
+import evaluation
 import utility
 from dataloader import DATALOADER
 
@@ -55,7 +56,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
         model.save(model_path_manager.get_path('%d'%(epoch_num)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
-    map_calculator = utility.Map_calculator(args)
+    map_calculator = evaluation.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     timer_test = utility.timer()
 
@@ -72,26 +73,27 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
         for cam_idx in range(args.num_valid_cam) : 
             dets = all_dets[cam_idx]
             gt = gt_batch[0][cam_idx]
-            map_calculator.add_img_tp(dets, gt) 
+            map_calculator.add_tp_fp(dets, gt) 
 
         progbar.update(idx/dataset_interval+1)
     
     all_aps = map_calculator.get_aps()
-    iou_avg = map_calculator.get_iou()
+    #iou_avg = map_calculator.get_iou()
 
     log_manager.add(all_aps, 'ap')
-    log_manager.add(iou_avg, 'iou')
+    #log_manager.add(iou_avg, 'iou')
     log_manager.save()
 
     all_ap_dict = map_calculator.get_aps_dict()
     cur_map = map_calculator.get_map()
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
-    log_manager.write_log('mAP\t%.4f'%(cur_map))
-    log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
+    log_manager.write_log('mAP\t%.2f'%(cur_map*100))
+    #log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
     log_manager.write_log('Runtime(s)\t{:.2f}'.format(timer_test.toc()))
-    for cls, prob in all_ap_dict.items():
-        log_manager.write_log('%s\t%.4f'%(cls, prob))
+    for i, (cls, prob) in enumerate(all_ap_dict.items()):
+        if prob<0 : continue
+        log_manager.write_log('%s\t%.2f'%(cls, prob*100))
     log_manager.write_log('\n')
 
     return cur_map
@@ -144,9 +146,10 @@ def write_json(args, model, img_preprocessor, dataloader):
     json_writer.close()
 
 def val_json_json(args, gt_dataloader, pred_dataloader):
+    num_test = 100
     utility.file_system(args)
     log_manager = utility.Log_manager(args)
-    map_calculator = utility.Map_calculator(args)
+    map_calculator = evaluation.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
     L2D = utility.Labels_to_draw_format(args)
     timer_test = utility.timer()
@@ -154,7 +157,7 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     progbar = generic_utils.Progbar(len(gt_dataloader))
     #for idx in range(len(gt_dataloader)):
     for idx in range(len(pred_dataloader)):
-        _, gt_labels, _, _, _, _  = gt_dataloader[idx]
+        _, gt_labels, path, _, _, _  = gt_dataloader[idx]
         _, pred_labels, _, _, _, _  = pred_dataloader[idx]
 
         gt_batch = sv_gt_batch_generator.get_gt_batch(gt_labels)
@@ -163,26 +166,46 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
         for cam_idx in range(args.num_valid_cam) : 
             dets = all_dets[cam_idx]
             gt = gt_batch[0][cam_idx]
-            map_calculator.add_img_tp(dets, gt) 
+            map_calculator.add_tp_fp(dets, gt) 
+
+            if idx*3+cam_idx+1 == num_test : break
 
         progbar.update(idx+1)
-    
+        if idx*3+cam_idx+1 == num_test : break
+
     all_aps = map_calculator.get_aps()
-    iou_avg = map_calculator.get_iou()
+    #iou_avg = map_calculator.get_iou()
 
     log_manager.add(all_aps, 'ap')
-    log_manager.add(iou_avg, 'iou')
+    #log_manager.add(iou_avg, 'iou')
     log_manager.save()
 
     all_ap_dict = map_calculator.get_aps_dict()
     cur_map = map_calculator.get_map()
     log_manager.write_cur_time()
     log_manager.write_log('Evaluation:')
-    log_manager.write_log('mAP\t%.4f'%(cur_map))
-    log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
+    log_manager.write_log('mAP\t%.2f'%(cur_map*100))
+    #log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
     log_manager.write_log('Runtime(s)\t{:.2f}'.format(timer_test.toc()))
-    for cls, prob in all_ap_dict.items():
-        log_manager.write_log('%s\t%.4f'%(cls, prob))
+
+    for i, (cls, v) in enumerate(map_calculator.gt_counter_per_class.items()):
+        if v<1 : continue
+        log_manager.write_log('%03d\t%d'%(i, v))
+    log_manager.write_log('\n')
+
+    for i, (cls, v) in enumerate(map_calculator.gt_counter_per_class.items()):
+        tp = int(sum(map_calculator.TP[cls]))
+        fp = int(sum(map_calculator.FP[cls]))
+
+        if tp == 0 and fp == 0: continue
+
+        log_manager.write_log('%03d\t%d\t%d'%(i, tp, fp))
+    log_manager.write_log('\n')
+
+    for i, (cls, prob) in enumerate(all_ap_dict.items()):
+        if prob<0 : continue
+        #log_manager.write_log('%s\t%.4f'%(cls, prob))
+        log_manager.write_log('%03d\t%.2f'%(i, prob*100))
     log_manager.write_log('\n')
     return cur_map
 
