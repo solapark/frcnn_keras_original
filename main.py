@@ -58,6 +58,7 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     map_calculator = evaluation.Map_calculator(args)
     sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
+    det_resizer = utility.Det_resizer(args)
     timer_test = utility.timer()
 
     dataset_interval = 18 if args.fast_val else 1
@@ -67,6 +68,8 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
         X = img_preprocessor.process_batch(images)
         all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
+        if args.mode != 'val_models' : 
+            det_resizer.resize(all_dets)
 
         gt_batch = sv_gt_batch_generator.get_gt_batch(labels)
  
@@ -146,7 +149,7 @@ def write_json(args, model, img_preprocessor, dataloader):
     json_writer.close()
 
 def val_json_json(args, gt_dataloader, pred_dataloader):
-    num_test = 100
+    #num_test = 100
     utility.file_system(args)
     log_manager = utility.Log_manager(args)
     map_calculator = evaluation.Map_calculator(args)
@@ -168,10 +171,10 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
             gt = gt_batch[0][cam_idx]
             map_calculator.add_tp_fp(dets, gt) 
 
-            if idx*3+cam_idx+1 == num_test : break
+            #if idx*3+cam_idx+1 == num_test : break
 
         progbar.update(idx+1)
-        if idx*3+cam_idx+1 == num_test : break
+        #if idx*3+cam_idx+1 == num_test : break
 
     all_aps = map_calculator.get_aps()
     #iou_avg = map_calculator.get_iou()
@@ -188,6 +191,7 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     #log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
     log_manager.write_log('Runtime(s)\t{:.2f}'.format(timer_test.toc()))
 
+    '''
     for i, (cls, v) in enumerate(map_calculator.gt_counter_per_class.items()):
         if v<1 : continue
         log_manager.write_log('%03d\t%d'%(i, v))
@@ -201,11 +205,12 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
 
         log_manager.write_log('%03d\t%d\t%d'%(i, tp, fp))
     log_manager.write_log('\n')
+    '''
 
     for i, (cls, prob) in enumerate(all_ap_dict.items()):
         if prob<0 : continue
-        #log_manager.write_log('%s\t%.4f'%(cls, prob))
-        log_manager.write_log('%03d\t%.2f'%(i, prob*100))
+        log_manager.write_log('%s\t%.2f'%(cls, prob*100))
+        #log_manager.write_log('%03d\t%.2f'%(i, prob*100))
     log_manager.write_log('\n')
     return cur_map
 
@@ -256,7 +261,7 @@ if __name__ == '__main__' :
         calc_map(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'val_models'):
         log_manager = utility.Log_manager(args)
-        val_dataloader = DATALOADER(args, 'val', args.dataset_path)
+        val_dataloader = DATALOADER(args, 'val_models', args.dataset_path)
         val_models(args,model, log_manager, img_preprocessor, val_dataloader)
     elif(args.mode == 'demo'):
         dataloader = DATALOADER(args, 'demo', args.dataset_path)

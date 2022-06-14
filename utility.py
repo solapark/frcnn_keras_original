@@ -1033,11 +1033,11 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
 
 def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
     cv2.rectangle(img,(x1, y1), (x2, y2), color, 4)
-    #textLabel = '{}:{}'.format(cls,int(100*prob)) if prob else cls
+    textLabel = '{}:{}'.format(cls,int(100*prob)) if prob else cls
     #textLabel = '{}_{}'.format(inst_num,textLabel) if inst_num else textLabel
     #textLabel = cls
     #textLabel = str(inst_num)
-    textLabel = ''
+    #textLabel = ''
     (text_w,text_h) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_DUPLEX,1,1)
     textOrg = (x1-10, y1-text_h)
     cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
@@ -1220,3 +1220,14 @@ class Json_writer :
         self.jm.sort()
         self.jm.save()
 
+class Det_resizer :
+    def __init__ (self, args) :
+        self.args = args
+
+    def resize(self, all_dets):
+        for cam_idx in range(self.args.num_valid_cam): 
+            dets = all_dets[cam_idx]
+            for det in dets:
+                x1, y1, x2, y2 = det['x1'], det['y1'], det['x2'], det['y2']
+
+                det['x1'], det['y1'], det['x2'], det['y2'] = [round(p/self.args.resize_ratio) for p in [x1, y1, x2, y2]]
