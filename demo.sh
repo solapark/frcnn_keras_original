@@ -257,3 +257,32 @@ CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTA
 #draw svdet+triplenet+majority+nms.json
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet+triplenet+majority+nms.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+triplenet+majority+nms.json
 
+
+----------------------------------------------------------
+#220516
+#comp_json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode comp_json --reset --dataset MESSYTABLE --save_dir comp_json/org_vs_remove_invalid_inst --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path1 /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18.json --pred_dataset_path2 /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst.json
+
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir 220516/mv_messytable_fine_tunning_from_model9  --input_weight_path  /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst.json --is_use_epipolar 
+
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/svdet_1041.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-messytable_model_1041/test/log.json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18.json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18_inter_class_nms.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_inter_class_nms.json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18_remove_invalid_inst.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst.json
+
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18_remove_invalid_inst.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst.json
+
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18_remove_invalid_inst_nms1.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst_nms1.json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/220516/test_model_18_remove_invalid_inst_inter_class_nms.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/test_model_18_remove_invalid_inst_inter_class_nms.json
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/sep_mvdet/svdet+asnet+majority.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
+
+

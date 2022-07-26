@@ -6,7 +6,7 @@ from template import get_dataset_info
 parser = argparse.ArgumentParser()
 
 #mode
-parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature', 'save_sv_wgt', 'draw_json', 'val_json_json', 'write_json'])
+parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature', 'save_sv_wgt', 'draw_json', 'val_json_json', 'write_json', 'comp_json'])
 parser.add_argument('--fast_val', action="store_true")
 
 #model
@@ -23,6 +23,8 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'])
 parser.add_argument("--dataset_path", help="Path to dataset.")
 parser.add_argument("--pred_dataset_path", help="Path to dataset.")
+parser.add_argument("--pred_dataset_path1", help="Path to dataset for comp json.")
+parser.add_argument("--pred_dataset_path2", help="Path to dataset for comp json.")
 parser.add_argument("--result_json_path", help="Path to save detection results.")
 parser.add_argument("--val_start_idx", default = 1, type=int, help="start idx of model to be validated")
 parser.add_argument("--val_end_idx", default = 10000, type=int, help="end idx of model to be validated")
@@ -120,6 +122,9 @@ parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='t
 
 #drawing
 parser.add_argument("--draw_inst_by_inst", help="draw one inst in one image.", action="store_true", default=False)
+
+#eval_thresh
+parser.add_argument('--eval_thresh', type=float, default=0)
 
 args = parser.parse_args()
 

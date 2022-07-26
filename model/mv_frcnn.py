@@ -327,10 +327,20 @@ class MV_FRCNN:
             cur_bboxes, cur_probs, cur_is_valids, _ = utility.classifier_output_to_box_prob(np.array(ROIs_list), P_cls, P_regr, iou_list, self.args, 0, self.args.num_valid_cam, False, is_exclude_bg=True)
 
             for cls_name in cur_bboxes.keys():
+                '''
+                for obj_idx in range(len(cur_probs[cls_name])):
+                    obj_prob = cur_probs[cls_name][obj_idx]
+
+                    if obj_prob > self.args.predict_thresh : 
+                        probs[cls_name].append(obj_prob)
+                        for cam_idx in range(self.args.num_valid_cam):
+                            bboxes[cls_name][cam_idx].append(cur_bboxes[cls_name][cam_idx][obj_idx])
+                            is_valids[cls_name][cam_idx].append(cur_is_valids[cls_name][cam_idx][obj_idx])
+ 
+                '''
                 for cam_idx in range(self.args.num_valid_cam):
                     bboxes[cls_name][cam_idx].extend(cur_bboxes[cls_name][cam_idx])
                     is_valids[cls_name][cam_idx].extend(cur_is_valids[cls_name][cam_idx])
-                    
                 probs[cls_name].extend(cur_probs[cls_name])
 
         all_dets = [[] for _ in range(self.args.num_valid_cam)]
@@ -352,6 +362,45 @@ class MV_FRCNN:
                     det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk], 'inst_idx': inst_idx}
                     all_dets[cam_idx].append(det)
                 inst_idx += 1
+        '''
+
+        cur_bboxes = []
+        cur_probs = []
+        cur_is_valids = []
+        cur_classes = []
+        for key in bboxes:
+            c_bboxes = np.array(bboxes[key])
+            if not c_bboxes.size : continue
+            c_probs = np.array(probs[key])
+            c_is_valids = np.array(is_valids[key])
+            c_classes = np.repeat(key, len(c_probs))
+
+            cur_bboxes.append(c_bboxes)
+            cur_probs.append(c_probs)
+            cur_is_valids.append(c_is_valids)
+            cur_classes.append(c_classes)
+
+        cur_bboxes = np.concatenate(cur_bboxes, 1)
+        cur_probs = np.concatenate(cur_probs)
+        cur_is_valids = np.concatenate(cur_is_valids, 1)
+        cur_classes = np.concatenate(cur_classes)
+
+        new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_classes = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_classes, overlap_thresh=self.args.classifier_nms_thresh)
+
+        inst_idx = 1
+        for jk in range(new_boxes_all_cam.shape[1]):
+            for cam_idx in range(self.args.num_valid_cam) : 
+                (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
+                is_valid = new_is_valids_all_cam[cam_idx, jk]
+                if not is_valid : 
+                    continue
+                #if(x1 == -self.args.rpn_stride) :
+                #    continue 
+                det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': new_classes[jk], 'prob': new_probs[jk], 'inst_idx': inst_idx}
+                all_dets[cam_idx].append(det)
+            inst_idx += 1
+        '''
+
         return all_dets
 
 

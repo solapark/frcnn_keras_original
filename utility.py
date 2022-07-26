@@ -225,6 +225,7 @@ class Log_manager:
     def __init__(self, args):
         self.args = args
         self.dir = os.path.join(args.base_path, 'experiment', args.save_dir)
+        os.makedirs(self.dir, exist_ok=True)
 
         self.write_config()
         self.log_file = self.get_log_file()
@@ -707,8 +708,10 @@ def pickle_load(path) :
     return pickle.load(f)
    
 def file_system(args):
-    if args.reset and (args.mode == 'train' or args.mode == 'val_json_json') :
-        save_path = os.path.join(args.base_dir, 'experiment', args.save_dir)
+    save_path = os.path.join(args.base_dir, 'experiment', args.save_dir)
+    os.makedirs(save_path, exist_ok = True)
+
+    if args.reset and (args.mode == 'train' or args.mode == 'val_json_json'or args.mode == 'comp_json') :
         model_path = os.path.join(save_path, 'model')
 
         os.system('rm -rf %s'%(save_path))
@@ -921,6 +924,92 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
+'''
+def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, classes, overlap_thresh=0.9, max_boxes=300):
+    # boxes : (num_cam, num_box, 4)
+    # probs : (num_box, )
+    # is_valids : (num_cam, num_box)
+    # code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
+    # if there are no boxes, return an empty list
+
+    # Process explanation:
+    #   Step 1: Sort the probs list
+    #   Step 2: Find the larget prob 'Last' in the list and save it to the pick list
+    #   Step 3: Calculate the IoU with 'Last' box and other boxes in the list. If the IoU is larger than overlap_threshold, delete the box from list
+    #   Step 4: Repeat step 2 and step 3 until there is no item in the probs list 
+    if len(boxes) == 0:
+        return []
+
+    boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
+    is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
+
+    boxes[np.where(boxes<0)] = 0
+    # grab the coordinates of the bounding boxes
+    x1 = boxes[:, :, 0] #(num_box, num_cam)
+    y1 = boxes[:, :, 1]
+    x2 = boxes[:, :, 2]
+    y2 = boxes[:, :, 3]
+
+    #np.testing.assert_array_less(x1, x2)
+    #np.testing.assert_array_less(y1, y2)
+
+    # if the bounding boxes integers, convert them to floats --
+    # this is important since we'll be doing a bunch of divisions
+    if boxes.dtype.kind == "i":
+        boxes = boxes.astype("float")
+
+    # initialize the list of picked indexes 
+    pick = []
+
+    # calculate the areas 
+    area = (x2 - x1) * (y2 - y1) #(num_box, num_cam)
+
+    # sort the bounding boxes 
+    idxs = np.argsort(probs) #(num_box,)
+
+    # keep looping while some indexes still remain in the indexes
+    # list
+    while len(idxs) > 0:
+        # grab the last index in the indexes list and add the
+        # index value to the list of picked indexes
+        last = len(idxs) - 1
+        i = idxs[last]
+        pick.append(i)
+        # find the intersection
+        xx1_int = np.maximum(x1[i], x1[idxs[:last]]) #x1[i]: (num_cam, ), x1[idxs[:last]]: (num_box, num_cam) #out: (num_box, num_cam)
+        yy1_int = np.maximum(y1[i], y1[idxs[:last]])
+        xx2_int = np.minimum(x2[i], x2[idxs[:last]])
+        yy2_int = np.minimum(y2[i], y2[idxs[:last]])
+
+        ww_int = np.maximum(0, xx2_int - xx1_int) #(num_box, num_cam)
+        hh_int = np.maximum(0, yy2_int - yy1_int)
+
+        area_int = ww_int * hh_int #(num_box, num_cam)
+
+        # find the union
+        area_union = area[i] + area[idxs[:last]] - area_int
+
+        # compute the ratio of overlap
+        overlap = area_int/(area_union + 1e-6) #(num_box, num_cam)
+
+        # delete all indexes from the index list that have
+        idxs = np.delete(idxs, np.concatenate(([last],
+            #np.where(np.all(overlap > overlap_thresh, 1))[0])))
+            #np.where(np.any(overlap > overlap_thresh, 1))[0])))
+            np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
+            #np.where(np.sum(overlap > overlap_thresh, 1) > 0)[0])))
+
+        if len(pick) >= max_boxes:
+            break
+
+    # return only the bounding boxes that were picked using the integer data type
+    boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
+    is_valids = is_valids[pick].transpose(1, 0)
+    probs = probs[pick]
+    classes = classes[pick]
+    return boxes, probs, is_valids, classes
+
+'''
 def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0.9, max_boxes=300):
     # boxes : (num_cam, num_box, 4)
     # probs : (num_box, )

@@ -80,6 +80,9 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
 
         progbar.update(idx/dataset_interval+1)
     
+    evaluation.log_eval(map_calculator, log_manager)
+
+    '''
     all_aps = map_calculator.get_aps()
     #iou_avg = map_calculator.get_iou()
 
@@ -98,6 +101,7 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
         if prob<0 : continue
         log_manager.write_log('%s\t%.2f'%(cls, prob*100))
     log_manager.write_log('\n')
+    '''
 
     return cur_map
 
@@ -148,6 +152,113 @@ def write_json(args, model, img_preprocessor, dataloader):
 
     json_writer.close()
 
+def comp_json(args, gt_dataloader, pred_dataloader1, pred_dataloader2):
+    #num_test = 100
+    utility.file_system(args)
+    log_manager = utility.Log_manager(args)
+    map_calculator1 = evaluation.Map_calculator(args)
+    map_calculator2 = evaluation.Map_calculator(args)
+    sv_gt_batch_generator = utility.Sv_gt_batch_generator(args)
+    L2D = utility.Labels_to_draw_format(args)
+    timer_test = utility.timer()
+
+    progbar = generic_utils.Progbar(len(gt_dataloader))
+    data_len = min(len(pred_dataloader1), len(pred_dataloader2))
+    for idx in range(data_len):
+        _, gt_labels, path, _, _, _  = gt_dataloader[idx]
+        _, pred_labels1, _, _, _, _  = pred_dataloader1[idx]
+        _, pred_labels2, _, _, _, _  = pred_dataloader2[idx]
+
+        gt_batch = sv_gt_batch_generator.get_gt_batch(gt_labels)
+        all_dets1 = L2D.labels_to_draw_format(pred_labels1)
+        all_dets2 = L2D.labels_to_draw_format(pred_labels2)
+ 
+        for cam_idx in range(args.num_valid_cam) : 
+            log_manager.write_log('path : %s'%(path[0][int(cam_idx)+1]))
+
+            dets1 = all_dets1[cam_idx]
+            dets2 = all_dets2[cam_idx]
+            gt = gt_batch[0][cam_idx]
+
+            map_calculator1.reset()
+            map_calculator2.reset()
+
+            map_calculator1.add_tp_fp(dets1, gt) 
+            map_calculator2.add_tp_fp(dets2, gt) 
+
+            eval1 = map_calculator1.get_eval()
+            eval2 = map_calculator2.get_eval()
+
+            mean_eval1 = map_calculator1.get_mean_eval()
+            mean_eval2 = map_calculator2.get_mean_eval()
+
+            metric = map_calculator1.metric
+
+            for metric_name, m_ev1, m_ev2 in zip(metric, mean_eval1, mean_eval2) :
+                log_manager.write_log('%s\t%.2f\t%.2f'%(metric_name, m_ev1, m_ev2))
+            log_manager.write_log('\n')
+
+            valid_cls = set(eval1[0].keys()).union(set(eval2[0].keys()))
+            valid_cls = sorted(list(valid_cls))
+
+            for metric_name, ev1, ev2, m_ev1, m_ev2 in zip(metric, eval1, eval2, mean_eval1, mean_eval2) :
+                log_manager.write_log('%s\t%.2f\t%.2f'%(metric_name, m_ev1, m_ev2))
+                log_manager.write_log('\n')
+
+                for i, cls in enumerate(valid_cls):
+                    e1 = ev1[cls]
+                    e2 = ev2[cls]
+
+                    if e1<0 and e2 < 0: continue
+
+                    if e1 > e2 :
+                        log_manager.write_log('*%s\t\t%.2f\t%.2f'%(cls, e1, e2))
+                    else :
+                        log_manager.write_log('%s\t\t%.2f\t%.2f'%(cls, e1, e2))
+
+                    log_manager.write_log('tp\t\t%d\t%d'%(sum(map_calculator1.TP[cls]), sum(map_calculator2.TP[cls])))
+                    log_manager.write_log('fp\t\t%d\t%d'%(sum(map_calculator1.FP[cls]), sum(map_calculator2.FP[cls])))
+                    log_manager.write_log('gt\t\t%d\t%d'%(map_calculator1.gt_counter_per_class[cls], map_calculator2.gt_counter_per_class[cls]))
+
+                log_manager.write_log('\n')
+ 
+            '''
+            all_aps1 = map_calculator1.get_aps()
+            all_aps2 = map_calculator2.get_aps()
+            #iou_avg = map_calculator.get_iou()
+
+            log_manager.add(all_aps1, 'ap1')
+            log_manager.add(all_aps2, 'ap2')
+            #log_manager.add(iou_avg, 'iou')
+            log_manager.save()
+
+            all_ap_dict1 = map_calculator1.get_aps_dict()
+            cur_map1 = map_calculator1.get_map()
+
+            all_ap_dict2 = map_calculator2.get_aps_dict()
+            cur_map2 = map_calculator2.get_map()
+
+            log_manager.write_log('mAP1\t%.2f\tmAP2\t%.2f'%(cur_map1*100, cur_map2*100))
+            log_manager.write_log('\n')
+
+            valid_cls = set(all_ap_dict1.keys()).union(set(all_ap_dict2.keys()))
+            valid_cls = sorted(list(valid_cls))
+            log_manager.write_log('cls\t\tprob1\tprob2')
+            for i, cls in enumerate(valid_cls):
+                prob1 = all_ap_dict1[cls]
+                prob2 = all_ap_dict2[cls]
+                if prob1<0 and prob2 < 0: continue
+                if prob1 > prob2 :
+                    log_manager.write_log('*%s\t\t%.2f\t%.2f'%(cls, prob1*100, prob2*100))
+                else :
+                    log_manager.write_log('%s\t\t%.2f\t%.2f'%(cls, prob1*100, prob2*100))
+            log_manager.write_log('\n')
+            '''
+
+        progbar.update(idx+1)
+
+    return cur_map1, cur_map2
+
 def val_json_json(args, gt_dataloader, pred_dataloader):
     #num_test = 100
     utility.file_system(args)
@@ -174,8 +285,11 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
             #if idx*3+cam_idx+1 == num_test : break
 
         progbar.update(idx+1)
-        #if idx*3+cam_idx+1 == num_test : break
+        #if idx == 10 : break
 
+    evaluation.log_eval(map_calculator, log_manager)
+
+    '''
     all_aps = map_calculator.get_aps()
     #iou_avg = map_calculator.get_iou()
 
@@ -190,6 +304,7 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     log_manager.write_log('mAP\t%.2f'%(cur_map*100))
     #log_manager.write_log('iou\t{:.3f}'.format(iou_avg))
     log_manager.write_log('Runtime(s)\t{:.2f}'.format(timer_test.toc()))
+    '''
 
     '''
     for i, (cls, v) in enumerate(map_calculator.gt_counter_per_class.items()):
@@ -207,12 +322,14 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
     log_manager.write_log('\n')
     '''
 
+    '''
     for i, (cls, prob) in enumerate(all_ap_dict.items()):
         if prob<0 : continue
         log_manager.write_log('%s\t%.2f'%(cls, prob*100))
         #log_manager.write_log('%03d\t%.2f'%(i, prob*100))
     log_manager.write_log('\n')
     return cur_map
+    '''
 
 
 def save_rpn_feature(args, model, img_preprocessor, dataloader) :
@@ -284,7 +401,14 @@ if __name__ == '__main__' :
         pred_dataloader = DATALOADER(args, 'val', args.pred_dataset_path)
         val_json_json(args, gt_dataloader, pred_dataloader)
 
+    elif(args.mode == 'comp_json'):
+        gt_dataloader = DATALOADER(args, 'val', args.dataset_path)
+        pred_dataloader1 = DATALOADER(args, 'val', args.pred_dataset_path1)
+        pred_dataloader2 = DATALOADER(args, 'val', args.pred_dataset_path2)
+        comp_json(args, gt_dataloader, pred_dataloader1, pred_dataloader2)
+
     elif(args.mode == 'write_json'):
+        utility.file_system(args)
         dataloader = DATALOADER(args, 'demo', args.dataset_path)
         write_json(args, model, img_preprocessor, dataloader)
 

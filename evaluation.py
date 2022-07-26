@@ -10,12 +10,17 @@ class Map_calculator:
         self.reset()
 
         self.min_overlap = 0.5
+        self.args = args
+
+        self.metric = ['MODA', 'MODP', 'F1', 'Recall', 'Precision']
 
     def reset(self):
         self.TP = {cls : [] for cls in self.class_list_wo_bg}
         self.FP = {cls : [] for cls in self.class_list_wo_bg}
 
         self.prob = {cls : [] for cls in self.class_list_wo_bg}
+
+        self.iou = {cls : [] for cls in self.class_list_wo_bg}
 
         self.gt_counter_per_class = {cls : 0 for cls in self.class_list_wo_bg}
 
@@ -162,9 +167,22 @@ class Map_calculator:
         
         return ground_truth_data
 
+    def thresholding(self, dets) :
+        result_det = dict()
+        for cls_name, cur_cls_det in dets.items():
+            result_det[cls_name] = []
+            for det in cur_cls_det : 
+                if det['confidence'] > self.args.eval_thresh :
+                    result_det[cls_name].append(det)
+                else :
+                    pass
+        return result_det
+
     def add_tp_fp(self, pred, gt):
         dr_data_dict = self.get_dr_data(pred)
         ground_truth_data = self.get_ground_truth_data(gt)
+
+        dr_data_dict = self.thresholding(dr_data_dict)
 
         for class_name in dr_data_dict.keys():
             dr_data = dr_data_dict[class_name]
@@ -172,6 +190,7 @@ class Map_calculator:
             tp = [0] * nd 
             fp = [0] * nd
             prob = [0] * nd
+            iou = [0] * nd
 
             for idx, detection in enumerate(dr_data):
                 ovmax = -1
@@ -198,6 +217,7 @@ class Map_calculator:
                         # true positive
                         tp[idx] = 1
                         gt_match["used"] = True
+                        iou[idx] = ovmax
                         #count_true_positives[class_name] += 1
                     else:
                         # false positive (multiple detection)
@@ -211,6 +231,7 @@ class Map_calculator:
             self.prob[class_name].extend(prob)
             self.TP[class_name].extend(tp)
             self.FP[class_name].extend(fp)
+            self.iou[class_name].extend(iou)
 
     def sort_tp_fp(self, prob, tp, fp):
         whole = np.column_stack([np.array(prob), np.array(tp), np.array(fp)])
@@ -241,7 +262,7 @@ class Map_calculator:
         for idx, val in enumerate(tp):
             prec[idx] = float(tp[idx]) / (fp[idx] + tp[idx])
         #print(prec)
-
+        
         return rec, prec
 
     def voc_ap(self, rec, prec):
@@ -294,6 +315,46 @@ class Map_calculator:
     def get_aps_dict(self):
         return self.all_aps_dict
 
+    def get_eval(self):
+        self.all_moda_dict = {class_name : -1 for class_name in self.class_list_wo_bg}
+        self.all_modp_dict = {class_name : -1 for class_name in self.class_list_wo_bg}
+        self.all_f1_dict = {class_name : -1 for class_name in self.class_list_wo_bg}
+        self.all_recall_dict = {class_name : -1 for class_name in self.class_list_wo_bg}
+        self.all_precision_dict = {class_name : -1 for class_name in self.class_list_wo_bg}
+
+        for class_name in self.class_list_wo_bg :
+            self.prob[class_name], self.TP[class_name], self.FP[class_name] = self.sort_tp_fp(self.prob[class_name], self.TP[class_name], self.FP[class_name])
+            gt_counter_per_class =  self.gt_counter_per_class[class_name]
+
+            if gt_counter_per_class : 
+                num_tp = np.array(self.TP[class_name]).sum()
+                num_fp = np.array(self.FP[class_name]).sum()
+                num_fn = gt_counter_per_class - num_tp
+
+                tp_iou_sum = np.array(self.iou[class_name]).sum()
+
+                rec = num_tp / gt_counter_per_class
+                prec = num_tp / (num_fp + num_tp)
+                
+                f1 = 2 * (rec * prec) / (rec + prec)
+
+                moda = 1 - (num_fn + num_fp) / gt_counter_per_class
+                modp = tp_iou_sum / num_tp
+
+                self.all_moda_dict[class_name] = moda if moda > 0 else 0
+                self.all_modp_dict[class_name] = modp if modp > 0 else 0
+                self.all_f1_dict[class_name] = f1 if f1 > 0 else 0
+                self.all_recall_dict[class_name] = rec if rec > 0 else 0
+                self.all_precision_dict[class_name] = prec if prec > 0 else 0
+
+        self.all_moda = list(self.all_moda_dict.values())
+        self.all_modp = list(self.all_modp_dict.values())
+        self.all_f1 = list(self.all_f1_dict.values())
+        self.all_recall = list(self.all_recall_dict.values())
+        self.all_precision = list(self.all_precision_dict.values())
+
+        return self.all_moda_dict, self.all_modp_dict, self.all_f1_dict, self.all_recall_dict, self.all_precision_dict
+
     def get_aps(self):
         self.all_aps_dict = {}
         for class_name in self.class_list_wo_bg :
@@ -310,9 +371,50 @@ class Map_calculator:
         self.all_aps = list(self.all_aps_dict.values())
         return self.all_aps
 
+    def get_valid_mean(self, metric):
+        metric = np.array(metric)
+        #metric = metric[metric >= 0]
+        return np.mean(metric)
+
+    def get_mean_eval(self) :
+        return list(map(self.get_valid_mean, [self.all_moda, self.all_modp, self.all_f1, self.all_recall, self.all_precision]))
+
+    def get_map(self) :
+        return self.get_valid_mean(self.all_aps)
+
+    '''
     def get_map(self) :
         self.all_aps = np.array(self.all_aps)
         valid_aps = self.all_aps[self.all_aps >= 0]
         return np.mean(valid_aps)
+    '''
 
+def log_eval(map_calculator, log_manager) :
+    eval = map_calculator.get_eval()
+    mean_eval = map_calculator.get_mean_eval()
+    metric = map_calculator.metric
+    valid_cls = list(eval[0].keys())
+    '''
+    for metric_name, ev, m_ev in zip(metric, eval, mean_eval) :
+        log_manager.write_log('%s\t%.2f'%(metric_name, m_ev))
+        for _, cls in enumerate(valid_cls):
+            e = ev[cls]
+            #if e<0: continue
+            log_manager.write_log('%s\t%.2f'%(cls, e))
+        log_manager.write_log('\n')
+    '''
+
+    metric_name = '\t'.join(metric)
+    metric_value = ['%.2f'%(m) for m in mean_eval]
+    metric_value = '\t'.join(metric_value)
+    log_manager.write_log('metric\t%s'%(metric_name))
+    log_manager.write_log('ALL\t%s'%(metric_value))
+
+    for _, cls in enumerate(valid_cls):
+        ev = [e[cls] for e in eval]
+        ev = ['%.2f'%(e) for e in ev]
+        ev = '\t'.join(ev)
+        #if e<0: continue
+        log_manager.write_log('%s\t%s'%(cls, ev))
+    log_manager.write_log('\n')
 

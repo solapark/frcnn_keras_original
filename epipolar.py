@@ -24,6 +24,9 @@ class EPIPOLAR :
 
         self.intrin = self.parse_intrin(args.dataset_path) #(num_valid_cam, 3, 3)
 
+        self.view_x_margin = 30
+        self.view_y_margin = 30
+
         self.args = args
 
     def parse_intrin(self, path):
@@ -181,15 +184,33 @@ class EPIPOLAR :
     def check_cross_pnt_valid(self, cross_pnt):
         pass
 
+    def is_pnt_in_view(self, pnt) :
+        x, y = pnt
+        if -self.view_x_margin < x < (self.width + self.view_x_margin) and -self.view_y_margin < y < (self.height + self.view_y_margin) :
+            return True 
+        else :
+            return False
+
     def get_box_idx_on_cross_line(self, line1, line2, boxes) : 
         cross_pnt = self.solve_system_of_equations(line1, line2)
         #if not self.check_cross_pnt_valid(cross_pnt):
         #    return [], [], [-1]
+        #print(cross_pnt)
         boxes = self.resized_box_to_original_box(boxes)
         boxes_centers = self.get_boxes_centers(boxes)
         dist = self.find_dist_pnt2pnts(cross_pnt, boxes_centers) / self.diag
         valid_idx = np.where(dist < self.max_dist_epiline_cross_to_box)
-        return valid_idx, dist, cross_pnt
+
+        is_valid_inst = True
+        if self.is_pnt_in_view(cross_pnt) and valid_idx[0].size == 0 :
+            is_valid_inst = False
+
+        if valid_idx[0].size :
+            is_valid_box = True
+        else :
+            is_valid_box = False
+
+        return valid_idx, dist, cross_pnt, is_valid_inst, is_valid_box
 
     def draw_boxes_with_epiline(self, ref_cam_idx, ref_box, target_cam_idx, epipolar_line, boxes) :
         boxes = self.resized_box_to_original_box(boxes)

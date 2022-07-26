@@ -130,10 +130,16 @@ class REID:
                 ref_epipolar_line = epipolar_lines[target_cam_idx]
                 match_epipolar_line = self.epipolar.get_epipolar_line(match_box_cam_idx, match_box, target_cam_idx)
 
-                valid_idx, dist, cross_pnt = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
+                valid_idx, dist, cross_pnt, is_valid_inst, is_valid_box = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
 
-                if not valid_idx[0].size:
-                #if not valid_idx[0].any():
+                '''
+                if not is_valid_inst :
+                    reid_box[i] = -1
+                    is_valid[i] = 0                    
+                    break
+                '''
+
+                if not is_valid_box:
                     #fail_boxes[i, target_cam_idx] = target_boxes
                     #fail_dists[i, target_cam_idx] = dist
                     #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
