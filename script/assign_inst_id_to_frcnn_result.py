@@ -63,6 +63,7 @@ if __name__ == '__main__' :
     parser.add_argument('--gt_path', type=str, default='/data1/sap/MessyTable/labels/test.json')
     parser.add_argument('--src_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json')
     parser.add_argument('--dst_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json')
+    parser.add_argument('--test_emb', action="store_true", default=False)
     parser.add_argument('--num_cam', type=int, default=3)
 
     args = parser.parse_args()
@@ -136,6 +137,10 @@ if __name__ == '__main__' :
                     new_id += 1
                 dst_json.insert_instance(scene_id, cam_id, pred_id, subcls, x1, y1, x2, y2, prob)
                 dst_json.insert_gt_id(scene_id, cam_id, pred_id, dst_inst_id)
+                if args.test_emb :
+                    dst_json.insert_emb_dist(scene_id, cam_id, pred_id, pred_inst['emb_dist'])
+                    dst_json.insert_is_valid(scene_id, cam_id, pred_id, pred_inst['is_valid'])
+
                 if not dst_json.is_inst_in_instance_summary(scene_id, pred_id) : 
                     dst_json.insert_instance_summary(scene_id, pred_id, subcls)
 

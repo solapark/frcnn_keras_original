@@ -55,6 +55,7 @@ if __name__ == '__main__' :
     parser.add_argument('--reid_img_pairs_path', type=str, default='/data3/sap/Messytable/models/svdet+asnet/results_img_pairs.json')
     parser.add_argument('--src_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json')
     parser.add_argument('--dst_json_path', type=str, default='/data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json')
+    parser.add_argument('--homo', action='store_true')
 
     args = parser.parse_args()
 
@@ -79,9 +80,12 @@ if __name__ == '__main__' :
             bi_G = Bipartite_graph()
             content = reid_img_pairs[scene_cam_pair]
 
-            app_dist_np = np.array(content['app_dist'], dtype='float').reshape(-1, 1)
-            epi_dist_np = np.array(content['epi_dist'], dtype='float').reshape(-1, 1)
-            overall_dist_np = np.add(epi_dist_np * scale_up_factor, app_dist_np) / scale_down_factor
+            if args.homo :
+                overall_dist_np = np.array(content['homo_dist'], dtype='float').reshape(-1, 1)
+            else : 
+                app_dist_np = np.array(content['app_dist'], dtype='float').reshape(-1, 1)
+                epi_dist_np = np.array(content['epi_dist'], dtype='float').reshape(-1, 1)
+                overall_dist_np = np.add(epi_dist_np * scale_up_factor, app_dist_np) / scale_down_factor
             score = 1 - scale_data(overall_dist_np)
             
             main_bbox_ids = np.array(content['main_bbox_id'])
@@ -167,5 +171,7 @@ if __name__ == '__main__' :
                     prob = 1.0
 
                 dst_json.insert_instance(scene_name, cam_idx, new_inst_id, cls, x1, y1, x2, y2, prob)
+
+        G.clear()
         
     dst_json.save()

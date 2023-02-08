@@ -797,14 +797,17 @@ def apply_regr(x, y, w, h, tx, ty, tw, th):
         print(e)
         return x, y, w, h
 
-def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
+def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, is_valids_list, emb_dists_list, iou_list, args, bbox_threshold, num_cam, is_demo, is_exclude_bg=False) : 
     if ROIs_list.ndim == 3 :
         ROIs_list = np.expand_dims(ROIs_list, 0)
+        emb_dists_list = np.expand_dims(emb_dists_list, 0)
+        is_valids_list = np.expand_dims(is_valids_list, 0)
     #class_mapping = args.num2cls
     class_mapping = args.class_list
     bboxes = {}
     probs = {}
     is_valids = {}
+    emb_dists = {}
     ious = {}
     # Calculate bboxes coordinates on resized image
     for ii in range(P_cls.shape[1]):
@@ -821,6 +824,7 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox
         if cls_name not in bboxes:
             bboxes[cls_name] = [[] for _ in range(num_cam)]
             is_valids[cls_name] = [[] for _ in range(num_cam)]
+            emb_dists[cls_name] = [[] for _ in range(num_cam)]
             ious[cls_name] = [[] for _ in range(num_cam)]
             probs[cls_name] = []
         
@@ -839,12 +843,14 @@ def classifier_output_to_box_prob(ROIs_list, P_cls, P_regr, iou_list, args, bbox
             except:
                 pass
             bboxes[cls_name][cam_idx].append([args.rpn_stride*x, args.rpn_stride*y, args.rpn_stride*(x+w), args.rpn_stride*(y+h)])
-            is_valids[cls_name][cam_idx].append(x != -1)
+            #is_valids[cls_name][cam_idx].append(x != -1)
+            is_valids[cls_name][cam_idx].append(is_valids_list[cam_idx][0, ii])
+            emb_dists[cls_name][cam_idx].append(emb_dists_list[cam_idx][0, ii])
 
             iou = iou_list[0, ii, cam_idx]
             ious[cls_name][cam_idx].append(iou)
         probs[cls_name].append(np.max(P_cls[0, ii, :]))
-    return bboxes, probs, is_valids, ious 
+    return bboxes, probs, is_valids, emb_dists, ious 
 
 def get_real_coordinates(ratio, x1, y1, x2, y2):
 
@@ -924,8 +930,7 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
-'''
-def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, classes, overlap_thresh=0.9, max_boxes=300):
+def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, overlap_thresh=0.9, max_boxes=300):
     # boxes : (num_cam, num_box, 4)
     # probs : (num_box, )
     # is_valids : (num_cam, num_box)
@@ -942,91 +947,8 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, classes, overlap
 
     boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
     is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
-
-    boxes[np.where(boxes<0)] = 0
-    # grab the coordinates of the bounding boxes
-    x1 = boxes[:, :, 0] #(num_box, num_cam)
-    y1 = boxes[:, :, 1]
-    x2 = boxes[:, :, 2]
-    y2 = boxes[:, :, 3]
-
-    #np.testing.assert_array_less(x1, x2)
-    #np.testing.assert_array_less(y1, y2)
-
-    # if the bounding boxes integers, convert them to floats --
-    # this is important since we'll be doing a bunch of divisions
-    if boxes.dtype.kind == "i":
-        boxes = boxes.astype("float")
-
-    # initialize the list of picked indexes 
-    pick = []
-
-    # calculate the areas 
-    area = (x2 - x1) * (y2 - y1) #(num_box, num_cam)
-
-    # sort the bounding boxes 
-    idxs = np.argsort(probs) #(num_box,)
-
-    # keep looping while some indexes still remain in the indexes
-    # list
-    while len(idxs) > 0:
-        # grab the last index in the indexes list and add the
-        # index value to the list of picked indexes
-        last = len(idxs) - 1
-        i = idxs[last]
-        pick.append(i)
-        # find the intersection
-        xx1_int = np.maximum(x1[i], x1[idxs[:last]]) #x1[i]: (num_cam, ), x1[idxs[:last]]: (num_box, num_cam) #out: (num_box, num_cam)
-        yy1_int = np.maximum(y1[i], y1[idxs[:last]])
-        xx2_int = np.minimum(x2[i], x2[idxs[:last]])
-        yy2_int = np.minimum(y2[i], y2[idxs[:last]])
-
-        ww_int = np.maximum(0, xx2_int - xx1_int) #(num_box, num_cam)
-        hh_int = np.maximum(0, yy2_int - yy1_int)
-
-        area_int = ww_int * hh_int #(num_box, num_cam)
-
-        # find the union
-        area_union = area[i] + area[idxs[:last]] - area_int
-
-        # compute the ratio of overlap
-        overlap = area_int/(area_union + 1e-6) #(num_box, num_cam)
-
-        # delete all indexes from the index list that have
-        idxs = np.delete(idxs, np.concatenate(([last],
-            #np.where(np.all(overlap > overlap_thresh, 1))[0])))
-            #np.where(np.any(overlap > overlap_thresh, 1))[0])))
-            np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
-            #np.where(np.sum(overlap > overlap_thresh, 1) > 0)[0])))
-
-        if len(pick) >= max_boxes:
-            break
-
-    # return only the bounding boxes that were picked using the integer data type
-    boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
-    is_valids = is_valids[pick].transpose(1, 0)
-    probs = probs[pick]
-    classes = classes[pick]
-    return boxes, probs, is_valids, classes
-
-'''
-def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0.9, max_boxes=300):
-    # boxes : (num_cam, num_box, 4)
-    # probs : (num_box, )
-    # is_valids : (num_cam, num_box)
-    # code used from here: http://www.pyimagesearch.com/2015/02/16/faster-non-maximum-suppression-python/
-    # if there are no boxes, return an empty list
-
-    # Process explanation:
-    #   Step 1: Sort the probs list
-    #   Step 2: Find the larget prob 'Last' in the list and save it to the pick list
-    #   Step 3: Calculate the IoU with 'Last' box and other boxes in the list. If the IoU is larger than overlap_threshold, delete the box from list
-    #   Step 4: Repeat step 2 and step 3 until there is no item in the probs list 
-    if len(boxes) == 0:
-        return []
-
-    boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
-    is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
+    if emb_dists : 
+        emb_dists = emb_dists.transpose(1, 0) #(num_box, num_cam)
 
     boxes[np.where(boxes<0)] = 0
     # grab the coordinates of the bounding boxes
@@ -1090,8 +1012,14 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, overlap_thresh=0
     # return only the bounding boxes that were picked using the integer data type
     boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
     is_valids = is_valids[pick].transpose(1, 0)
+    if emb_dists : 
+        emb_dists = emb_dists[pick].transpose(1, 0)
     probs = probs[pick]
-    return boxes, probs, is_valids
+
+    if emb_dists : 
+        return boxes, probs, is_valids, emb_dists
+    else :
+        return boxes, probs, is_valids
 
 def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch, pos_neg_result_batch) : 
     boxes_list = boxes_batch[0].astype(int)*rpn_stride  #(300, num_cam, 4)
@@ -1120,9 +1048,15 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
         cv2.imshow('reid_result', conc_img)
         cv2.waitKey(0)
 
-def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None):
+def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None, emb_dist=None, is_valid=None):
     cv2.rectangle(img,(x1, y1), (x2, y2), color, 4)
     textLabel = '{}:{}'.format(cls,int(100*prob)) if prob else cls
+    if is_valid and emb_dist :
+        #textLabel = '%d:%.2f'%(is_valid, emb_dist)
+        textLabel = '%.2f'%(emb_dist) if is_valid > 1 else ''
+        if is_valid == 1 : 
+            cv2.rectangle(img,(x1, y1), (x2, y2), (0,0,0), 4)
+         
     #textLabel = '{}_{}'.format(inst_num,textLabel) if inst_num else textLabel
     #textLabel = cls
     #textLabel = str(inst_num)
@@ -1194,6 +1128,10 @@ class Result_saver :
             dets = all_dets[cam_idx]
             for det in dets:
                 x1, y1, x2, y2, prob, cls, inst_idx = det['x1'], det['y1'], det['x2'], det['y2'], det['prob'], det['class'], det['inst_idx']
+
+                emb_dist = round(det['emb_dist'], 2) if self.args.is_draw_emb_dist else None
+                is_valid = int(det['is_valid']) if self.args.is_draw_is_valid else None
+
                 cls_idx = self.args.cls2num_with_bg[cls]
                 #det_color = self.colors[cls_idx]
                 #det_color = self.colors[inst_idx]
@@ -1204,7 +1142,7 @@ class Result_saver :
                 if not inst_idx in img_dict :
                     img_dict[inst_idx] = copy.deepcopy(img_list)
 
-                img_dict[inst_idx][cam_idx] = draw_inst(img_dict[inst_idx][cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx)
+                img_dict[inst_idx][cam_idx] = draw_inst(img_dict[inst_idx][cam_idx], x1, y1, x2, y2, cls, det_color, prob, inst_idx, emb_dist, is_valid)
                 #break
 
         for inst_idx, img_list in img_dict.items() :
@@ -1231,10 +1169,65 @@ def get_value_in_pattern(text, pattern):
     #return = ['b']
     return re.findall(pattern, text)[0]
 
+class Reid_to_write_format :
+    def __init__(self, args):
+        self.num_cam = args.num_cam
+        self.rpn_stride = args.rpn_stride
+
+    def reid_to_write_format(self, reid_box_pred_batch, is_valid_batch):
+        #reid_box_pred_batch : (batch_size, num_nms, num_cam, 4) #(1, 300, 3, 4)
+        #is_valid_batch : (batch_size, num_nms, num_cam) #(1, 300, 3)
+
+        pred_box = reid_box_pred_batch[0].transpose(1, 0, 2)
+        is_valid = is_valid_batch[0].transpose(1, 0)
+        dst = [[] for _ in range(self.num_cam)]
+
+        pred_box = pred_box*self.rpn_stride
+        pred_box = np.rint(pred_box).astype('int')
+        cls = 'water1' 
+        prob = 1
+        for cam_idx, (pred_box_in_cam, is_valid_in_cam) in enumerate(zip(pred_box, is_valid)) :
+            for i, (box, is_valid) in enumerate(zip(pred_box_in_cam, is_valid_in_cam)) :
+                if not is_valid : 
+                    continue
+
+                x1, y1, x2, y2 = box
+                #x1, y1, x2, y2 = list(map(int, box))
+                #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
+                dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':i})
+
+        return dst
+
+class RP_to_write_format :
+    def __init__(self, args):
+        self.num_cam = args.num_cam
+        self.rpn_stride = args.rpn_stride
+
+    def rp_to_write_format(self, pred_box_batch, pred_box_prob_batch):
+        #pred_box_batch : (batch_size, num_cam, num_nms, 4) #(1, 3, 300, 4)
+        #pred_box_prob_batch : (batch_size, num_cam, num_nms) #(1, 3, 300)
+
+        pred_box = pred_box_batch[0]
+        pred_box_prob = pred_box_prob_batch[0]
+        dst = [[] for _ in range(self.num_cam)]
+
+        pred_box = pred_box*self.rpn_stride
+        pred_box = np.rint(pred_box).astype('int')
+        cls = 'water1' 
+        for cam_idx, (pred_box_in_cam, pred_prob_in_cam) in enumerate(zip(pred_box, pred_box_prob)) :
+            for i, (box, prob) in enumerate(zip(pred_box_in_cam, pred_prob_in_cam)) :
+                x1, y1, x2, y2 = box
+                #x1, y1, x2, y2 = list(map(int, box))
+                #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
+                dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':i})
+
+        return dst
+
 class Labels_to_draw_format :
     def __init__(self, args):
         self.num2cls_with_bg = args.num2cls_with_bg.copy() 
         self.num_cam = args.num_cam
+        self.args = args
 
     def labels_to_draw_format(self, labels):
         # labels 
@@ -1255,12 +1248,20 @@ class Labels_to_draw_format :
 
             boxes_all_cam = inst['resized_box']
             probs_all_cam = inst['prob']
+            is_valids_all_cam = inst['is_valid']
+            emb_dists_all_cam = inst['emb_dist']
             for cam_idx, box in boxes_all_cam.items() :
                 x1, y1, x2, y2 = list(map(round, box))
                 #x1, y1, x2, y2 = list(map(int, box))
                 #x1, y1, x2, y2 = [int(p/resize_ratio) for p in [x1, y1, x2, y2]]
                 prob = probs_all_cam[cam_idx]
-                dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'inst_idx':instance_num})
+                if prob < self.args.draw_thresh : 
+                    continue
+
+                is_valid = is_valids_all_cam[cam_idx]
+                emb_dist = emb_dists_all_cam[cam_idx]
+
+                dst[cam_idx].append({'x1':x1, 'y1':y1, 'x2':x2, 'y2':y2, 'class':cls, 'prob':prob, 'is_valid':is_valid, 'emb_dist':emb_dist, 'inst_idx':instance_num})
 
         return dst
 
@@ -1304,6 +1305,11 @@ class Json_writer :
                 cls_idx = self.class_mapping[cls] 
                 self.jm.insert_instance(scene_num, cam_num, inst_idx, cls_idx, x1, y1, x2, y2, prob) 
                 self.jm.insert_instance_summary(scene_num, inst_idx, cls_idx)
+                if self.args.write_is_valid :
+                    self.jm.insert_is_valid(scene_num, cam_num, inst_idx, det['is_valid'])
+
+                if self.args.write_emb_dist :
+                    self.jm.insert_emb_dist(scene_num, cam_num, inst_idx, det['emb_dist'])
 
     def close(self):
         self.jm.sort()

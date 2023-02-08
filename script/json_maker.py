@@ -1,4 +1,5 @@
 import json
+import copy
 
 class json_maker :
     def __init__(self, scenes, path, num_cam) :
@@ -72,6 +73,12 @@ class json_maker :
         prob = float(prob) if prob else None
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst] = {'subcls' : cls, 'pos': [x1, y1, x2, y2], 'prob':prob}
 
+    def insert_emb_dist(self, scene, cam, inst, emb_dist) :
+        self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['emb_dist'] = emb_dist
+
+    def insert_is_valid(self, scene, cam, inst, is_valid) :
+        self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['is_valid'] = int(is_valid)
+
     def insert_gt_id(self, scene, cam, inst, gt_id) :
         self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['gt_id'] = gt_id
 
@@ -95,6 +102,12 @@ class json_maker :
 
     def get_extrinsics(self, scene, cam) :
         return self.json['scenes'][scene]['cameras'][cam]['extrinsics'] 
+
+    def insert_corners(self, scene, cam, corners) :
+        self.json['scenes'][scene]['cameras'][cam]['corners'] = corners
+
+    def get_corners(self, scene, cam) :
+        return self.json['scenes'][scene]['cameras'][cam]['corners'] 
 
     def get_scene(self, scene_num):
         return self.json['scenes'][scene_num]
@@ -125,12 +138,25 @@ class json_maker :
         instances = cam['instances']
         inst_dict_list = []
         for inst_id, inst_info in instances.items():
+            '''
             subcls = inst_info['subcls']
             pos = inst_info['pos']
             prob= inst_info['prob'] if 'prob' in inst_info else 1
             if prob < thresh :
                 continue
             inst_dict = {'inst_id' : inst_id, 'subcls' : subcls, 'pos' : pos, 'prob':prob}
+            '''
+
+            inst_dict = copy.deepcopy(inst_info)
+            if 'prob' not in inst_dict : 
+                inst_dict['prob'] =  1
+
+            if inst_dict['prob'] < thresh :
+                continue
+
+            inst_dict['inst_id'] = inst_id
+
+
             inst_dict_list.append(inst_dict)
         return path_name, inst_dict_list
 
