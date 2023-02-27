@@ -56,5 +56,11 @@ class Model :
     def predict_batch(self, X, images, extrins, rpn_results, ven_results):
         return self.model.predict_batch(X, images, extrins, rpn_results, ven_results) 
 
+    def predict_reid_batch(self, X, images, extrins, rpn_results, ven_results):
+        return self.model.predict_reid_batch(X, images, extrins, rpn_results, ven_results) 
+
+    def predict_rpn_only_batch(self, X, images, extrins, rpn_results, ven_results):
+        return self.model.predict_rpn_only_batch(X, images, extrins, rpn_results, ven_results) 
+
     def train_batch(self, X, images, labels, image_paths, extrins, rpn_results, ven_results):
         return self.model.train_batch(X, images, labels, image_paths, extrins, rpn_results, ven_results)

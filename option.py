@@ -61,6 +61,14 @@ parser.add_argument("--freeze_classifier", action="store_true", default=False)
 parser.add_argument("--rpn_pickle_dir", default='rpn_pickle')
 parser.add_argument("--ven_pickle_dir", default='ven_pickle')
 
+parser.add_argument("--write_rpn_only", action="store_true", default=False)
+parser.add_argument("--write_reid", action="store_true", default=False)
+parser.add_argument("--write_is_valid", action="store_true", default=False)
+parser.add_argument("--write_emb_dist", action="store_true", default=False)
+parser.add_argument("--write_bg", action="store_true", default=False)
+
+parser.add_argument("--eval_rpn_only", action="store_true", default=False)
+
 #anchor
 parser.add_argument("--anchor_box_scales", nargs=3, default=[64, 128, 256], help="anchor box scales")
 parser.add_argument('--anchor_box_ratios', type=str, default=[1, 1, 1./math.sqrt(2), 2./math.sqrt(2), 2./math.sqrt(2), 1./math.sqrt(2)],help="anchor box ratios")
@@ -101,6 +109,7 @@ parser.add_argument('--ven_loss_alpha', type=float, default=.3, help='reid_loss_
 #reid
 parser.add_argument('--is_use_epipolar', action="store_true", default=False)
 parser.add_argument('--reid_min_emb_dist', type=float, default=.5, help='minimum embedding distance to match two pred boxes')
+#parser.add_argument('--reid_vague_emb_dist', type=float, default=.5, help='vague_embedding distance to match two pred boxes')
 #parser.add_argument('--max_dist_epiline_to_box', type=float, default=.01, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_cross_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar cross line')
@@ -122,6 +131,10 @@ parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='t
 
 #drawing
 parser.add_argument("--draw_inst_by_inst", help="draw one inst in one image.", action="store_true", default=False)
+parser.add_argument("--draw_thresh", type=float, default=0.0)
+parser.add_argument("--draw_num", type=float, default=300)
+parser.add_argument("--is_draw_emb_dist", action="store_true", default=False)
+parser.add_argument("--is_draw_is_valid", action="store_true", default=False)
 
 #eval_thresh
 parser.add_argument('--eval_thresh', type=float, default=0)

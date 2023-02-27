@@ -95,7 +95,7 @@ class DATALOADER :
             resized_instance_dict = dict()
             for instance_num, cls in list(scene_content['instance_summary'].items()) :
                 if is_class_minus_one: cls -= 1
-                resized_instance_dict[instance_num] = {'cls':cls, 'instance_num':instance_num, 'resized_box':{}, 'prob':{}}
+                resized_instance_dict[instance_num] = {'cls':cls, 'instance_num':instance_num, 'resized_box':{}, 'prob':{}, 'is_valid':{}, 'emb_dist':{}}
                 for cam_num, camera_content in list(scene_content['cameras'].items()) :
                     cam_num = int(cam_num)
                     if self.args.dataset == 'MESSYTABLE' : cam_num -= 1
@@ -109,6 +109,13 @@ class DATALOADER :
                         resized_instance_dict[instance_num]['resized_box'][cam_num] = list(map(float, [x1, y1, x2, y2]))
                         prob = camera_content['instances'][instance_num]['prob'] if 'prob' in camera_content['instances'][instance_num] else 1
                         resized_instance_dict[instance_num]['prob'][cam_num] = prob
+
+                        is_valid = camera_content['instances'][instance_num]['is_valid'] if 'is_valid' in camera_content['instances'][instance_num] else -2
+                        resized_instance_dict[instance_num]['is_valid'][cam_num] = is_valid
+
+                        emb_dist = camera_content['instances'][instance_num]['emb_dist'] if 'emb_dist' in camera_content['instances'][instance_num] else -2
+                        resized_instance_dict[instance_num]['emb_dist'][cam_num] = emb_dist
+
                 if len(resized_instance_dict[instance_num]['resized_box']) == 0 :
                     resized_instance_dict.pop(instance_num)
 

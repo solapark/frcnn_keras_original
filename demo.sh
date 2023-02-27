@@ -81,6 +81,9 @@ CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode val_models --dataset MESSYTA
 #demo 341
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode demo --dataset MESSYTABLE --save_dir mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model_341 --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05/model/model_341.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --max_dist_epiline_to_box .05
 
+# write json_rpn_only
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir write_json_rpn_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/model/model_80.hdf5 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/mv_messytable_classifier_only_strict_pos_max_dist_epiline_to_box.05_model_341_fine_tunning/test_model_80.json --write_rpn_only --is_use_epipolar
+
 
 -----------------------------------------------------------
 #svdet#
@@ -100,7 +103,6 @@ CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dat
 python script/assign_inst_id_to_frcnn_result_past.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/log.json --dst_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
 
 # draw svdet.json
-*draw svdet.json
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/svdet.json --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet.json
 
 -------------------------------------------------------------

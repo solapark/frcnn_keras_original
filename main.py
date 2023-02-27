@@ -143,10 +143,21 @@ def draw_json(args, dataloader):
 def write_json(args, model, img_preprocessor, dataloader):
     progbar = generic_utils.Progbar(len(dataloader))
     json_writer = utility.Json_writer(args)
+    rp_to_write_format = utility.RP_to_write_format(args)
+    reid_to_write_format = utility.Reid_to_write_format(args)
     for idx in range(len(dataloader)):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
         X = img_preprocessor.process_batch(images)
-        all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
+        if args.write_rpn_only :
+            pred_box_batch, pred_box_prob_batch = model.predict_rpn_only_batch(X, images, extrins, rpn_results, ven_results)
+            all_dets = rp_to_write_format.rp_to_write_format(pred_box_batch, pred_box_prob_batch)
+        elif args.write_reid :
+            reid_box_pred_batch, is_valid_batch = model.predict_reid_batch(X, images, extrins, rpn_results, ven_results)
+            all_dets = reid_to_write_format.reid_to_write_format(reid_box_pred_batch, is_valid_batch)
+
+        else :
+            all_dets = model.predict_batch(X, images, extrins, rpn_results, ven_results)
+
         json_writer.write(all_dets, image_paths)
         progbar.update(idx+1)
 

@@ -148,7 +148,8 @@ class Map_calculator:
 
         for box_idx in box_idx_sorted_by_prob:
             pred_box = pred[box_idx]
-            cls = pred_box['class']
+            #cls = pred_box['class']
+            cls = pred_box['class'] if not self.args.eval_rpn_only else 'water1'
             prob = pred_box['prob']
             bbox = self.get_x1y1x2y2(pred_box)
             dr_data[cls].append({"confidence":prob, "bbox":bbox})
@@ -159,7 +160,8 @@ class Map_calculator:
         ground_truth_data = {cls : [] for cls in self.class_list_wo_bg}
 
         for gt_box in gt:
-            cls = gt_box['class']
+            #cls = gt_box['class']
+            cls = gt_box['class'] if not self.args.eval_rpn_only else 'water1'
             bbox = self.get_x1y1x2y2(gt_box)
             bbox = list(map(round, bbox))
             ground_truth_data[cls].append({"bbox":bbox, "used":False})

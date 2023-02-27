@@ -43,17 +43,18 @@ class REID:
         return np.array(ref_cam_idx_batch)
  
     def get_batch(self, *args):
-        reid_box_pred_batch, is_valid_batch  = [], []
+        reid_box_pred_batch, is_valid_batch, emb_dist_batch  = [], [], []
         for args_one_batch in zip(*args) :
             if self.is_use_epipolar :
-                reid_box_pred, is_valid = self.get_reid_box_epi_const(*args_one_batch)
+                reid_box_pred, is_valid, emb_dist = self.get_reid_box_epi_const(*args_one_batch)
 
             else :
                 reid_box_pred, is_valid = self.get_reid_box(*args_one_batch)
             reid_box_pred_batch.append(reid_box_pred)
             is_valid_batch.append(is_valid)
+            emb_dist_batch.append(emb_dist)
 
-        return np.array(reid_box_pred_batch), np.array(is_valid_batch)
+        return np.array(reid_box_pred_batch), np.array(is_valid_batch), np.array(emb_dist_batch)
 
     def get_reid_box_epi_const(self, pred_box, pred_box_emb, pred_box_prob, extrins, debug_imgs = None):
         """get ref idx, postive idx, negative idx for reid training
@@ -68,12 +69,11 @@ class REID:
         self.epipolar.reset(extrins, debug_imgs)
 
         reid_box = -np.ones((self.num_nms, self.num_cam, 4))
-        is_valid = np.zeros((self.num_nms, self.num_cam), dtype='uint8')
-        fail_boxes = np.empty((self.num_nms, self.num_cam), dtype=object)
-        fail_dists = np.empty((self.num_nms, self.num_cam), dtype=object)
+        is_valid = np.zeros((self.num_nms, self.num_cam))
+        emb_dist = -np.ones((self.num_nms, self.num_cam), dtype='float')
 
         ref_cam_idx_list, ref_box_list, ref_emb_list = self.get_ref(pred_box_prob, pred_box, pred_box_emb)
-        
+
         for i, (ref_cam_idx, ref_box, ref_emb) in enumerate(zip(ref_cam_idx_list, ref_box_list, ref_emb_list)):
             reid_box[i, ref_cam_idx] = ref_box
             is_valid[i, ref_cam_idx] = 1 
@@ -110,11 +110,15 @@ class REID:
                 epi_boxes_dict[target_cam_idx] = epi_boxes
                 epi_embs_dict[target_cam_idx] = epi_embs
 
+            #if match_box is None  or match_box_emb_dist > self.reid_min_emb_dist :
             if match_box is None :
+                #print(match_box_emb_dist)
+                #self.draw_fail_reid(debug_imgs, ref_box, ref_cam_idx, match_box, match_box_cam_idx, match_box_emb_dist)
                 continue
 
             reid_box[i, match_box_cam_idx] = match_box
             is_valid[i, match_box_cam_idx] = 2 
+            emb_dist[i, match_box_cam_idx] = match_box_emb_dist
 
             for offset in range(1, self.num_cam):
                 target_cam_idx = (ref_cam_idx + offset) % self.num_cam
@@ -133,10 +137,10 @@ class REID:
                 valid_idx, dist, cross_pnt, is_valid_inst, is_valid_box = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
 
                 '''
-                if not is_valid_inst :
-                    reid_box[i] = -1
-                    is_valid[i] = 0                    
-                    break
+                #if not is_valid_inst :
+                #    reid_box[i] = -1
+                #    is_valid[i] = 0                    
+                #    break
                 '''
 
                 if not is_valid_box:
@@ -154,10 +158,130 @@ class REID:
 
                 reid_box[i, target_cam_idx] = cross_box
                 is_valid[i, target_cam_idx] = 3 
+                emb_dist[i, target_cam_idx] = min_dist
 
                 #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
 
+        return reid_box, is_valid, emb_dist
+    '''
+
+    def get_reid_box_epi_const(self, pred_box, pred_box_emb, pred_box_prob, extrins, debug_imgs = None):
+        """get ref idx, postive idx, negative idx for reid training
+            Args : 
+                pred_box : x1, y1, x2, y2 #(num_cam, 300, 4)
+                pred_box_emb #(num_cam, 300, featsize) 
+                pred_box_prob #(num_cam, 300)
+            Return :
+                reid_box #(300, num_cam, 4)
+                is_valid #(300, num_cam)
+        """
+        self.epipolar.reset(extrins, debug_imgs)
+
+        reid_box = -np.ones((self.num_nms, self.num_cam, 4))
+        is_valid = np.zeros((self.num_nms, self.num_cam), dtype='uint8')
+        fail_boxes = np.empty((self.num_nms, self.num_cam), dtype=object)
+        fail_dists = np.empty((self.num_nms, self.num_cam), dtype=object)
+
+        ref_cam_idx_list, ref_box_list, ref_emb_list = self.get_ref(pred_box_prob, pred_box, pred_box_emb)
+
+        final_reid_box = -np.ones((self.num_nms, self.num_cam, 4))
+        final_is_valid = np.zeros((self.num_nms, self.num_cam), dtype='uint8')
+        inst_cnt = 0
+        for i, (ref_cam_idx, ref_box, ref_emb) in enumerate(zip(ref_cam_idx_list, ref_box_list, ref_emb_list)):
+            #reid_box[i, ref_cam_idx] = ref_box
+            #is_valid[i, ref_cam_idx] = 1 
+
+            epipolar_lines = self.epipolar.get_epipolar_lines(ref_cam_idx, ref_box)
+
+            match_box = None
+            match_box_cam_idx = None
+            match_box_emb_dist = np.inf
+
+            epi_boxes_dict = {}
+            epi_embs_dict = {}
+            for offset in range(1, self.num_cam):
+                target_cam_idx = (ref_cam_idx + offset) % self.num_cam
+                cand_boxes = pred_box[target_cam_idx]
+                cand_embs = pred_box_emb[target_cam_idx]
+                epi_box_idx = self.epipolar.get_box_idx_on_epiline(epipolar_lines[target_cam_idx], cand_boxes)
+                #self.epipolar.draw_boxes_with_epiline(ref_cam_idx, ref_box, target_cam_idx, epipolar_lines[target_cam_idx], cand_boxes)
+
+                epi_boxes = cand_boxes[epi_box_idx ]
+                epi_embs = cand_embs[epi_box_idx ]
+
+                if not epi_boxes.size : 
+                    continue
+
+                min_dist_idx, min_dist = utility.get_min_emb_dist_idx(ref_emb, epi_embs, is_want_dist=True)
+
+                #if min_dist < self.reid_min_emb_dist and min_dist < match_box_emb_dist :
+                if min_dist < match_box_emb_dist :
+                    match_box = epi_boxes[min_dist_idx]
+                    match_box_cam_idx = target_cam_idx
+                    match_box_emb_dist = min_dist
+
+                epi_boxes_dict[target_cam_idx] = epi_boxes
+                epi_embs_dict[target_cam_idx] = epi_embs
+
+            #if match_box is None :
+            #    continue
+
+            if  min_dist > self.reid_min_emb_dist :
+                reid_box[inst_cnt, ref_cam_idx] = ref_box
+                is_valid[inst_cnt, ref_cam_idx] = 1 
+                inst_cnt += 1
+                if inst_cnt == self.args.num_nms :
+                    break
+
+            reid_box[inst_cnt, ref_cam_idx] = ref_box
+            is_valid[inst_cnt, ref_cam_idx] = 1 
+            reid_box[inst_cnt, match_box_cam_idx] = match_box
+            is_valid[inst_cnt, match_box_cam_idx] = 2 
+
+            for offset in range(1, self.num_cam):
+                target_cam_idx = (ref_cam_idx + offset) % self.num_cam
+                if target_cam_idx not in epi_boxes_dict :
+                    continue
+
+                if match_box_cam_idx == target_cam_idx :
+                    continue
+
+                target_boxes = epi_boxes_dict[target_cam_idx]
+                target_embs = epi_embs_dict[target_cam_idx]
+
+                ref_epipolar_line = epipolar_lines[target_cam_idx]
+                match_epipolar_line = self.epipolar.get_epipolar_line(match_box_cam_idx, match_box, target_cam_idx)
+
+                valid_idx, dist, cross_pnt, is_valid_inst, is_valid_box = self.epipolar.get_box_idx_on_cross_line(ref_epipolar_line, match_epipolar_line, target_boxes)
+
+                #if not is_valid_inst :
+                #    reid_box[i] = -1
+                #    is_valid[i] = 0                    
+                #    break
+
+                if not is_valid_box:
+                    #fail_boxes[i, target_cam_idx] = target_boxes
+                    #fail_dists[i, target_cam_idx] = dist
+                    #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
+                    continue
+
+                valid_boxes = target_boxes[valid_idx]
+                valid_embs = target_embs[valid_idx]
+
+                min_dist_idx, min_dist = utility.get_min_emb_dist_idx(ref_emb, valid_embs, is_want_dist=True)
+
+                cross_box = valid_boxes[min_dist_idx]
+
+                reid_box[inst_cnt, target_cam_idx] = cross_box
+                is_valid[inst_cnt, target_cam_idx] = 3 
+
+                #self.draw_reid(debug_imgs, reid_box[i], is_valid[i], fail_boxes[i], fail_dists[i], cross_pnt)
+            inst_cnt += 1
+            if inst_cnt == self.args.num_nms :
+                break
+
         return reid_box, is_valid
+    '''
 
     def get_reid_box(self, pred_box, pred_box_emb, pred_box_prob, extrins=None):
         """get ref idx, postive idx, negative idx for reid training
@@ -209,6 +333,22 @@ class REID:
             cv2.imshow('reid', concat_img)
             cv2.waitKey(waitKey)
 
+
+    def draw_fail_reid(self, imgs, ref_box, ref_cam_idx, match_box, match_cam_idx, dist):
+        img_list = [np.copy(imgs[i]) for i in range(self.args.num_valid_cam)]
+
+        ref_box = ref_box.astype('int')*self.args.rpn_stride
+        match_box = match_box.astype('int')*self.args.rpn_stride
+
+        color = (0, 0, 255)
+        text =str(round(dist, 3))
+
+        img_list[ref_cam_idx] = utility.draw_box(img_list[ref_cam_idx], ref_box, '', color, is_show=False)
+        img_list[match_cam_idx] = utility.draw_box(img_list[match_cam_idx], match_box, '', color, is_show=False, text = text)
+
+        conc_img = utility.get_concat_img(img_list)
+        cv2.imshow('reid_result', conc_img)
+        cv2.waitKey(0)    
 
     def draw_reid(self, imgs, boxes, is_valids, fail_boxes, fail_dists, cross_pnt):
         img_list = []

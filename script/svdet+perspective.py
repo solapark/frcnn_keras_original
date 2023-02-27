@@ -19,8 +19,8 @@ import cv2
 def draw_circle(img, org, radius, color, thickness): 
     img = cv2.circle(img, tuple(org), radius, color, thickness)
 
-imageA_path = '/data1/sap/MessyTable/images/20190921-00003-01-01.jpg' 
-imageB_path = '/data1/sap/MessyTable/images/20190921-00003-01-02.jpg' 
+imageA_path = '/data1/sap/MessyTable/images/20191216-01068-08_02.jpg' 
+imageB_path = '/data1/sap/MessyTable/images/20191216-01068-08_01.jpg' 
 imageA = cv2.imread(imageA_path) 
 imageB = cv2.imread(imageB_path)
  
