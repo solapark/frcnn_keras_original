@@ -1,3 +1,5 @@
+#cmd example : python script/svdet+reid.py --reid_img_pairs_path /data3/sap/Messytable/models/svdet+asnet/results_img_pairs.json --src_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet_gt_aligned.json --dst_json_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet.json
+
 import networkx as nx
 import json
 from itertools import combinations 
