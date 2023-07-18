@@ -76,6 +76,7 @@ if __name__ == '__main__' :
     for scene_cam_pairs in tqdm(scene_list) : #scene_cam_pairs = ['20190921-00003-02,1,2', '20190921-00003-02,1,3', '20190921-00003-02,2,3']
         G = nx.Graph()
         cam_mask = np.zeros((num_cam, ))
+        #1. Generate nodes(detection result) and edges(reid score) of a graph for one scene.
         for scene_cam_pair in scene_cam_pairs : #scene_cam_pair = '20190921-00003-02,1,2'
             scene_name, main_cam_idx, sec_cam_idx = scene_cam_pair.split(',')
 
@@ -131,7 +132,7 @@ if __name__ == '__main__' :
                     #print(simple_paths)
                     paths = paths.union(simple_paths)
                     
-        #3. Remove invalid(remove path with repeated cameras. ex) 1_1 - 2_1 - 1-2 - 3-1 ).
+        #3. Remove invalid(remove path with repeated cameras. ex) camId_instId : 1_1 - 2_1 - 1-2 - 3-1 ). 
         to_remove = []
         for path in paths :
             cam_id_list = [split_id(node)[0] for node in path]
