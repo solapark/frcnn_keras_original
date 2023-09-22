@@ -6,7 +6,7 @@ from template import get_dataset_info
 parser = argparse.ArgumentParser()
 
 #mode
-parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature', 'save_sv_wgt', 'draw_json', 'val_json_json', 'write_json', 'comp_json'])
+parser.add_argument('--mode', type=str, default='demo', choices=['train', 'val', 'demo', 'val_models', 'save_rpn_feature', 'save_ven_feature', 'save_reid_input', 'save_sv_wgt', 'draw_json', 'val_json_json', 'write_json', 'comp_json'])
 parser.add_argument('--fast_val', action="store_true")
 
 #model
@@ -60,6 +60,7 @@ parser.add_argument("--freeze_ven", action="store_true", default=False)
 parser.add_argument("--freeze_classifier", action="store_true", default=False)
 parser.add_argument("--rpn_pickle_dir", default='rpn_pickle')
 parser.add_argument("--ven_pickle_dir", default='ven_pickle')
+parser.add_argument("--reid_input_pickle_dir", default='reid_input_pickle')
 
 parser.add_argument("--write_rpn_only", action="store_true", default=False)
 parser.add_argument("--write_reid", action="store_true", default=False)

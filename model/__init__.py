@@ -64,3 +64,6 @@ class Model :
 
     def train_batch(self, X, images, labels, image_paths, extrins, rpn_results, ven_results):
         return self.model.train_batch(X, images, labels, image_paths, extrins, rpn_results, ven_results)
+
+    def get_reid_input(self, X, images, labels, image_paths, extrins, rpn_results, ven_results):
+        return self.model.get_reid_input(X, images, labels, image_paths, extrins, rpn_results, ven_results)

@@ -145,6 +145,7 @@ if __name__ == '__main__' :
                     gt_id_in_G = matching[pred_id_in_G]
                     dst_inst_id = gt_id_in_G.split('_')[1]
                 else :
+                    #continue
                     dst_inst_id = str(new_id)
                     new_id += 1
                 dst_json.insert_instance(scene_id, cam_id, dst_inst_id, subcls, x1, y1, x2, y2, prob)

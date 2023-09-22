@@ -629,7 +629,7 @@ class MV_FRCNN:
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result[0]
             inputs = shared_feats 
         else :
-            loss[:2] = self.rpn_train_batch(X, debug_img, Y)
+            loss[2] = self.rpn_train_batch(X, debug_img, Y)
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, _ = self.rpn_predict_batch(X, debug_img)
             inputs = list(X)
 
@@ -659,3 +659,14 @@ class MV_FRCNN:
         loss[-1] = loss[:-1].sum()
 
         return loss, num_pos_samples
+
+    def get_reid_input(self, X, debug_img, Y, image_paths, extrins, rpn_result, ven_result):
+        pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_img)
+        all_box_emb_batch, pred_box_emb_batch = self.predict_ven_batch(shared_feats, pred_box_idx_batch, pred_box_batch)
+
+        H, W = debug_img[0].shape[1:3]
+        H /= self.args.rpn_stride
+        W /= self.args.rpn_stride
+        return pred_box_batch[0].transpose(1, 0, 2), pred_box_emb_batch[0].transpose(1, 0, 2), pred_box_prob_batch[0].transpose(1, 0),(H,W)
+
+

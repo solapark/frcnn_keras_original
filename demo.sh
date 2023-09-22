@@ -288,3 +288,34 @@ CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dat
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/sep_mvdet/svdet+asnet+majority.json --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras/result/result-sv_messytable_cam3_resume_model_110/test_3cam/svdet+asnet+majority.json
 
 
+----------------------------------
+230921 for multiview reid in transformer
+#mvdet check
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir 230921/mvdet  --input_weight_path  /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet.json --is_use_epipolar
+
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/230921/mvdet --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet.json
+
+# write mvdet rpn_only
+#train
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir 230921/mvdet/train --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --dataset_path /data1/sap/MessyTable/labels/train.json --result_json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --write_rpn_only --is_use_epipolar
+
+#assign gt inst id to rpn result
+python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json
+
+#align rpn with gt id
+python script/assign_inst_id_to_frcnn_result_past.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned.json
+
+# draw mvdet rpn_only
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/mvdet_rpn_only300/train --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --draw_inst_by_inst
+
+# draw mvdet rpn_only aligned
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/mvdet_rpn_only300_aligned/train --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned.json --draw_inst_by_inst
+
+#val
+#test
+
+# save reid input pickle
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode save_reid_feature --dataset MESSYTABLE --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --reid_input_pickle_dir pickle/messytable/mvdet/reid_input/train
+
+
+

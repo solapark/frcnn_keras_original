@@ -947,7 +947,7 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, 
 
     boxes = boxes.transpose(1, 0, 2) #(num_box, num_cam, 4)
     is_valids = is_valids.transpose(1, 0) #(num_box, num_cam)
-    if emb_dists : 
+    if emb_dists is not None : 
         emb_dists = emb_dists.transpose(1, 0) #(num_box, num_cam)
 
     boxes[np.where(boxes<0)] = 0
@@ -1012,11 +1012,11 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, 
     # return only the bounding boxes that were picked using the integer data type
     boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
     is_valids = is_valids[pick].transpose(1, 0)
-    if emb_dists : 
+    if emb_dists is not None: 
         emb_dists = emb_dists[pick].transpose(1, 0)
     probs = probs[pick]
 
-    if emb_dists : 
+    if emb_dists is not None: 
         return boxes, probs, is_valids, emb_dists
     else :
         return boxes, probs, is_valids

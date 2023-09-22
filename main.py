@@ -369,6 +369,19 @@ def save_ven_feature(args, model, img_preprocessor, dataloader) :
         ven_result_saver.save(img_paths[0], ven_result)
         progbar.update(idx+1)
 
+def save_reid_input(args, model, img_preprocessor, dataloader) :
+    reid_input_result_saver = utility.Pickle_result_saver(args, args.reid_input_pickle_dir)
+    progbar = generic_utils.Progbar(len(dataloader))
+
+    for idx in range(len(dataloader)):
+        images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
+        X = img_preprocessor.process_batch(images)
+
+        reid_input = model.get_reid_input(X, images, labels, image_paths, extrins, rpn_results, ven_results)
+
+        reid_input_result_saver.save(image_paths[0], reid_input)
+        progbar.update(idx+1)
+
 def save_sv_wgt(args, model):
     model.load_sv_wgt(args.input_weight_path)
     model.save(args.output_weight_path)
@@ -400,6 +413,9 @@ if __name__ == '__main__' :
     elif(args.mode == 'save_ven_feature'):
         dataloader = DATALOADER(args, 'save_ven_feature', args.dataset_path)
         save_ven_feature(args, model, img_preprocessor, dataloader)
+    elif(args.mode == 'save_reid_input'):
+        dataloader = DATALOADER(args, 'save_rpn_feature', args.dataset_path)
+        save_reid_input(args, model, img_preprocessor, dataloader)
     elif(args.mode == 'save_sv_wgt'):
         save_sv_wgt(args, model)
 

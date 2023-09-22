@@ -6,9 +6,56 @@ import os
 import pickle
 import itertools
 
+import matplotlib as mpl
+mpl.use('Agg')
+
+import matplotlib.pyplot as plt
 from json_maker import json_maker 
 
 CLASS = {'water1': 1, 'water2': 2, 'pepsi': 3, 'coca1': 4, 'coca2': 5, 'coca3': 6, 'coca4': 7, 'tea1': 8, 'tea2': 9, 'yogurt': 10, 'ramen1': 11, 'ramen2': 12, 'ramen3': 13, 'ramen4': 14, 'ramen5': 15, 'ramen6': 16, 'ramen7': 17, 'juice1': 18, 'juice2': 19, 'can1': 20, 'can2': 21, 'can3': 22, 'can4': 23, 'can5': 24, 'can6': 25, 'can7': 26, 'can8': 27, 'can9': 28, 'ham1': 29, 'ham2': 30, 'pack1': 31, 'pack2': 32, 'pack3': 33, 'pack4': 34, 'pack5': 35, 'pack6': 36, 'snack1': 37, 'snack2': 38, 'snack3': 39, 'snack4': 40, 'snack5': 41, 'snack6': 42, 'snack7': 43, 'snack8': 44, 'snack9': 45, 'snack10': 46, 'snack11': 47, 'snack12': 48, 'snack13': 49, 'snack14': 50, 'snack15': 51, 'snack16': 52, 'snack17': 53, 'snack18': 54, 'snack19': 55, 'snack20': 56, 'snack21': 57, 'snack22': 58, 'snack23': 59, 'snack24': 60, 'green_apple': 61, 'red_apple': 62, 'tangerine': 63, 'lime': 64, 'lemon': 65, 'yellow_quince': 66, 'green_quince': 67, 'white_quince': 68, 'fruit1': 69, 'fruit2': 70, 'peach': 71, 'banana': 72, 'fruit3': 73, 'pineapple': 74, 'fruit4': 75, 'strawberry': 76, 'cherry': 77, 'red_pimento': 78, 'green_pimento': 79, 'carrot': 80, 'cabbage1': 81, 'cabbage2': 82, 'eggplant': 83, 'bread': 84, 'baguette': 85, 'sandwich': 86, 'hamburger': 87, 'hotdog': 88, 'donuts': 89, 'cake': 90, 'onion': 91, 'marshmallow': 92, 'mooncake': 93, 'shirimpsushi': 94, 'sushi1': 95, 'sushi2': 96, 'big_spoon': 97, 'small_spoon': 98, 'fork': 99, 'knife': 100, 'big_plate': 101, 'small_plate': 102, 'bowl': 103, 'white_ricebowl': 104, 'blue_ricebowl': 105, 'black_ricebowl': 106, 'green_ricebowl': 107, 'black_mug': 108, 'gray_mug': 109, 'pink_mug': 110, 'green_mug': 111, 'blue_mug': 112, 'blue_cup': 113, 'orange_cup': 114, 'yellow_cup': 115, 'big_wineglass': 116, 'small_wineglass': 117, 'glass1': 118, 'glass2': 119, 'glass3': 120, 'bg':121}
+
+def draw_scatter_plot(pnts):
+    # pnts #(N, 3)
+
+    fig = plt.figure()
+    ax = fig.gca(projection = '3d')
+
+    print(pnts)
+    X, Y, Z = np.transpose(pnts)
+
+    ax.scatter(X, Y, Z)
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    plt.title('Object Center')
+    plt.show()
+    plt.savefig('Object_Center.png')
+
+def mv_DLT(Ps, pnts):
+    # Ps #(num_cams, 4, 4)
+    # pnts #(num_cams, 2) 
+
+    pnts = pnts.reshape((-1, 2, 1))
+    first_row = pnts[:, 1] * Ps[:, 2] - Ps[:, 1]
+    second_row = Ps[:, 0] - pnts[:, 0] * Ps[:, 2]
+
+    A = np.concatenate([first_row, second_row], 0).reshape((-1, 4))
+    #print(pnts)
+    #print('P1: ')
+    #print(Ps[0])
+    #print('P2: ')
+    #print(Ps[1])
+    #print('A: ')
+    #print(A)
+ 
+    B = A.transpose() @ A
+    from scipy import linalg
+    U, s, Vh = linalg.svd(B, full_matrices = False)
+ 
+    #print('Triangulated point: ')
+    #print(Vh[3,0:3]/Vh[3,3])
+    return Vh[3,0:3]/Vh[3,3]
 
 def DLT(P1, P2, point1, point2):
  
@@ -18,6 +65,11 @@ def DLT(P1, P2, point1, point2):
          P2[0,:] - point2[0]*P2[2,:]
         ]
     A = np.array(A).reshape((4,4))
+    #print(point1, point2)
+    #print('P1: ')
+    #print(P1)
+    #print('P2: ')
+    #print(P2)
     #print('A: ')
     #print(A)
  
@@ -25,8 +77,8 @@ def DLT(P1, P2, point1, point2):
     from scipy import linalg
     U, s, Vh = linalg.svd(B, full_matrices = False)
  
-    print('Triangulated point: ')
-    print(Vh[3,0:3]/Vh[3,3])
+    #print('Triangulated point: ')
+    #print(Vh[3,0:3]/Vh[3,3])
     return Vh[3,0:3]/Vh[3,3]
 
 def fill_infos(all_scene_ids, json):
@@ -45,6 +97,7 @@ def fill_infos(all_scene_ids, json):
 
     intrinsics = json.get_intrinsics()
 
+    inst_3dp_list = []
     for scene_id in all_scene_ids :
         instance_summary = json.get_instance_summary(scene_id)
         num_inst = len(instance_summary)
@@ -74,16 +127,15 @@ def fill_infos(all_scene_ids, json):
             K[:3, :3] = np.array(intrinsic).reshape(3, 3)
 
             extrinsic = json.get_extrinsics(scene_id, cam_id)
-            T_a2r = np.eye(4)
-            T_a2r[0:3, 0:3] = R.from_euler('xyz', extrinsic[3:]).as_matrix()
-            T_a2r[0:3, 3] = np.array(extrinsic[:3])
-            E = np.linalg.inv(T_a2r)
+            E = np.eye(4)
+            E[0:3, 0:3] = R.from_euler('xyz', extrinsic[3:]).as_matrix()
+            E[0:3, 3] = np.array(extrinsic[:3])
 
             #E = np.eye(4)
             #E[0:3, 0:3] = R.from_euler('xyz', extrinsic[3:]).as_matrix()
             #E[0:3, 3] = np.array(extrinsic[:3])
 
-            world2img = K @ E
+            world2img = K @ np.linalg.inv(E)
 
             cam = scene['cameras'][cam_id]
             path_name, instances = json.get_all_inst(cam)
@@ -118,6 +170,7 @@ def fill_infos(all_scene_ids, json):
             valid_cam_ids = [ str(cam_idx+1) for cam_idx, cam_valid in enumerate(info["cam_instances_valid_flags"]) if cam_valid[inst_idx]==1]
             valid_cam_ids_pair = list(itertools.combinations(valid_cam_ids, 2))
             homo_3dp_samples = np.array([]).reshape((4, 0))
+            '''
             for camA_id, camB_id in valid_cam_ids_pair :
                 camA_P = info['cams'][camA_id]['world2img']
                 camB_P = info['cams'][camB_id]['world2img']
@@ -173,17 +226,63 @@ def fill_infos(all_scene_ids, json):
                 print('camB_inst_cxcy', camB_inst_cxcy)
                 print('camB_2dp', (camB_2dp[:2]/camB_2dp[2]).reshape(2, ))
                 print('camB_2dp_avg', (camB_2dp_avg[:2]/camB_2dp_avg[2]).reshape(2, ))
+            '''
+
+            Ps = []
+            pnts = []
+            for cam_id in valid_cam_ids :
+            #for cam_id in list(['1','2','3']) :
+                P = info['cams'][cam_id]['world2img']
+                cam_idx = int(cam_id) - 1
+                inst_pos = info["cam_instances"][cam_idx][inst_idx]
+                inst_cxcy = [(inst_pos[0] + inst_pos[2])//2, (inst_pos[1] + inst_pos[3])//2]
+
+                Ps.append(P)
+                pnts.append(inst_cxcy)
+
+            Ps = np.stack(Ps, 0)
+            pnts = np.stack(pnts, 0)
+            
+            inst_3dp = mv_DLT(Ps, pnts)
+            homo_3dp = np.concatenate([inst_3dp, [1]]).reshape((4, 1))
+            inst_3dp_list.append(inst_3dp)
+
+            for cam_id in valid_cam_ids :
+                P = info['cams'][cam_id]['world2img']
+                cam_idx = int(cam_id) - 1
+                inst_pos = info["cam_instances"][cam_idx][inst_idx]
+                inst_cxcy = [(inst_pos[0] + inst_pos[2])//2, (inst_pos[1] + inst_pos[3])//2]
+
+                cam_2dp = P @ homo_3dp
+
+                E = info['cams'][cam_id]['extrinsic']
+                K = info['cams'][cam_id]['intrinsic']
+
+                print('scene_id', info['scene_id']) 
+                print('cam_id', cam_id, 'inst_idx', inst_idx, 'inst_cls', info['gt_names'][inst_idx])
+                print('homo_3dp', homo_3dp.reshape(-1,)[:3])
+                print('inst_cxcy', inst_cxcy)
+                print('cam_2dp', (cam_2dp[:2]/cam_2dp[2]).reshape(2, ))
+                print('E_inv * (x,y,z)', np.linalg.inv(E) @ homo_3dp)
+                print('P', P)
+                print('E', E)
+                print('K', K)
 
         #print(info)
         infos.append(info)
+        #break
+
+    inst_3dp_list = np.stack(inst_3dp_list, 0)
+
+    draw_scatter_plot(inst_3dp_list)
 
     return infos
 
 if __name__ == '__main__' :
     parser=argparse.ArgumentParser()
-    #parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/train.json')
+    parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/train.json')
     #parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/val.json')
-    parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/test.json')
+    #parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/test.json')
     parser.add_argument('--save_dir', default= '/data3/sap/VEDet/data/Messytable/')
     parser.add_argument('--img_dir', default = '/data1/sap/MessyTable/images')
     #parser.add_argument('--type', type=str, default = 'train')
@@ -191,6 +290,15 @@ if __name__ == '__main__' :
     parser.add_argument('--type', type=str, default = 'test')
 
     args = parser.parse_args()
+
+    inst_3dp_list = np.load('inst_3dp_list.npy')
+    #plt.hist(inst_3dp_list[:, 0], label='x', bins=10, range=[-2, 2])
+    #plt.hist(inst_3dp_list[:, 1], label='y', bins=10, range=[-1, 1])
+    plt.hist(inst_3dp_list[:, 2], label='z', bins=10, range=[-1, 1])
+    plt.legend()
+    plt.savefig('inst_3dp_list_hist.png')
+
+    draw_scatter_plot(inst_3dp_list)
 
     json = json_maker([], args.json_path, 0)
     json.load()

@@ -46,6 +46,8 @@ def fill_infos(all_scene_ids, json):
         scene = json.get_scene(scene_id)
         all_cam_idx = json.get_all_cams(scene) 
 
+        cam_instances_list = []
+        cam_instances_valid_flags_list = []
         for cam_id in all_cam_idx:
             intrinsic = intrinsics[cam_id]
             K = np.eye(4)
@@ -71,14 +73,22 @@ def fill_infos(all_scene_ids, json):
 
             info['cams'].update({cam_id: cam_info})
 
-            info['cam_instances'][cam_id] = np.zeros((num_inst, 4))
-            info['cam_instances_valid_flags'][cam_id] = np.zeros((num_inst, ))
+            cam_instances = np.zeros((num_inst, 4))
+            cam_instances_valid_flags = np.zeros((num_inst, ))
 
             for instance in instances :
                 inst_id = instance['inst_id']
                 inst_idx = inst_ids.index(inst_id)
-                info['cam_instances'][cam_id][inst_idx] = instance['pos']
-                info['cam_instances_valid_flags'][cam_id][inst_idx] = 1
+                x1, y1, x2, y2 = instance['pos']
+                cx, cy, w, h = (x1+x2)/2, (y1+y2)/2, x2-x1, y2-y1
+                cam_instances[inst_idx] = cx, cy, w, h
+                cam_instances_valid_flags[inst_idx] = 1
+
+            cam_instances_list.append(cam_instances)
+            cam_instances_valid_flags_list.append(cam_instances_valid_flags)
+
+        info.update(cam_instances = np.stack(cam_instances_list, axis=0))
+        info.update(cam_instances_valid_flags = np.stack(cam_instances_valid_flags_list, axis=0))
 
         #print(info)
         infos.append(info)
@@ -92,6 +102,8 @@ if __name__ == '__main__' :
     parser.add_argument('--json_path', default = '/data1/sap/MessyTable/labels/test.json')
     parser.add_argument('--save_dir', default= '/data3/sap/VEDet/data/Messytable/')
     parser.add_argument('--img_dir', default = '/data1/sap/MessyTable/images')
+    #parser.add_argument('--type', type=str, default = 'train')
+    #parser.add_argument('--type', type=str, default = 'val')
     parser.add_argument('--type', type=str, default = 'test')
 
     args = parser.parse_args()
