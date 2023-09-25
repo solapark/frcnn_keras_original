@@ -302,8 +302,11 @@ CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode write_json --dataset MESSYTA
 #assign gt inst id to rpn result
 python script/assign_inst_id_to_frcnn_result.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json
 
-#align rpn with gt id
-python script/assign_inst_id_to_frcnn_result_past.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned.json
+#align rpn with gt id (include results which don't belong to any gt)
+python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned.json 
+
+#align rpn with gt id (exclude results which don't belong to any gt) (assign gt class)
+python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned_core.json --save_core --assign_gt_class
 
 # draw mvdet rpn_only
 CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/mvdet_rpn_only300/train --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --draw_inst_by_inst
@@ -316,6 +319,10 @@ CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTA
 
 # save reid input pickle
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode save_reid_feature --dataset MESSYTABLE --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --reid_input_pickle_dir pickle/messytable/mvdet/reid_input/train
+
+# reid input to nuscenes
+python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned_core.json --type train --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/train  --save_dir /data3/sap/VEDet/data/Messytable/debug
+
 
 
 
