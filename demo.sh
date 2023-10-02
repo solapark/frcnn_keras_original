@@ -321,7 +321,7 @@ CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTA
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode save_reid_feature --dataset MESSYTABLE --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --reid_input_pickle_dir pickle/messytable/mvdet/reid_input/train
 
 # reid input to nuscenes
-python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned_core.json --type train --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/train  --save_dir /data3/sap/VEDet/data/Messytable/debug
+python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned_core.json --type train --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/train  --save_dir /data3/sap/VEDet/data/Messytable/rpn
 
 
 

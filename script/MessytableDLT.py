@@ -291,14 +291,14 @@ if __name__ == '__main__' :
 
     args = parser.parse_args()
 
-    inst_3dp_list = np.load('inst_3dp_list.npy')
+    #inst_3dp_list = np.load('inst_3dp_list.npy')
     #plt.hist(inst_3dp_list[:, 0], label='x', bins=10, range=[-2, 2])
     #plt.hist(inst_3dp_list[:, 1], label='y', bins=10, range=[-1, 1])
-    plt.hist(inst_3dp_list[:, 2], label='z', bins=10, range=[-1, 1])
-    plt.legend()
-    plt.savefig('inst_3dp_list_hist.png')
+    #plt.hist(inst_3dp_list[:, 2], label='z', bins=10, range=[-1, 1])
+    #plt.legend()
+    #plt.savefig('inst_3dp_list_hist.png')
 
-    draw_scatter_plot(inst_3dp_list)
+    #draw_scatter_plot(inst_3dp_list)
 
     json = json_maker([], args.json_path, 0)
     json.load()

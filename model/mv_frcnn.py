@@ -664,9 +664,12 @@ class MV_FRCNN:
         pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_img)
         all_box_emb_batch, pred_box_emb_batch = self.predict_ven_batch(shared_feats, pred_box_idx_batch, pred_box_batch)
 
-        H, W = debug_img[0].shape[1:3]
-        H /= self.args.rpn_stride
-        W /= self.args.rpn_stride
-        return pred_box_batch[0].transpose(1, 0, 2), pred_box_emb_batch[0].transpose(1, 0, 2), pred_box_prob_batch[0].transpose(1, 0),(H,W)
+        pred_box_batch = np.rint(pred_box_batch * self.args.rpn_stride / self.args.resize_ratio)
+
+        #H, W = debug_img[0].shape[1:3]
+        #H /= self.args.rpn_stride
+        #W /= self.args.rpn_stride
+        #return pred_box_batch[0].transpose(1, 0, 2), pred_box_emb_batch[0].transpose(1, 0, 2), pred_box_prob_batch[0].transpose(1, 0),(H,W)
+        return pred_box_batch[0].transpose(1, 0, 2), pred_box_emb_batch[0].transpose(1, 0, 2), pred_box_prob_batch[0].transpose(1, 0)
 
 
