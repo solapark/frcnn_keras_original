@@ -26,6 +26,8 @@ class CLASSIFIER_GT_CALCULATOR:
         self.regr_size = self.num_valid_cam*self.num_cls*8
 
         self.args = args
+        self.fair_classifier_gt_choice = args.fair_classifier_gt_choice
+        
  
     def get_batch(self, *args):
         X_box_batch, Y_cls_batch, Y_regr_batch, ious_list_batch, num_neg_batch, num_pos_batch, pos_neg_result_batch = [], [], [], [], [], [], []
@@ -67,8 +69,10 @@ class CLASSIFIER_GT_CALCULATOR:
         pos_neg_result = []
         all_iou_list = []
         for pred_idx, (pred_boxes, is_pred_valid) in enumerate(zip(all_pred_boxes, is_pred_box_valid)):
+            #if np.isnan(is_pred_valid).sum() == len(is_pred_valid) : continue
+
             best_iou = 0.0 
-            best_iou_list = None
+            best_iou_list = [None] * len(is_pred_valid)
             best_valid_iou_list = None
             best_gt_idx = -1
             best_is_neg = False
@@ -102,6 +106,16 @@ class CLASSIFIER_GT_CALCULATOR:
 
         pos_pred_idx, pos_gt_idx = np.array(pos_pred_idx, dtype='int'), np.array(pos_gt_idx, dtype='int')
         pos_iou, pos_iou_list = np.array(pos_iou), np.array(pos_iou_list)
+        if self.fair_classifier_gt_choice:
+            pos_gt_idx_whole = np.concatenate([np.arange(len(all_gt_boxes)), pos_gt_idx])
+            unique, counts = np.unique(pos_gt_idx_whole, return_counts=True)
+            counts -= 1
+            choice_prob = 1/counts/len(unique)
+            choice_prob[choice_prob == np.inf] = 0
+            pos_choice_prob = choice_prob[pos_gt_idx]
+            pos_choice_prob /= pos_choice_prob.sum()
+        else : 
+            pos_choice_prob=None
 
         neg_pred_idx  = np.array(neg_idx, dtype='int')
         neg_iou, neg_iou_list = np.array(neg_iou), np.array(neg_iou_list)
@@ -143,7 +157,7 @@ class CLASSIFIER_GT_CALCULATOR:
             Y_regr = np.concatenate([Y_regr_neg, Y_regr_pos], 0)
 
             iou = np.concatenate([neg_iou, pos_iou], 0)
-            iou_list = np.concatenate([neg_iou_list, pos_iou_list], 0)
+            iou_list = np.concatenate([neg_iou_list.reshape(-1, 3), pos_iou_list.reshape(-1, 3)], 0)
 
         else :
             X_box = neg_box
@@ -155,18 +169,18 @@ class CLASSIFIER_GT_CALCULATOR:
         X_box[:, :, 2] -= X_box[:, :, 0]
         X_box[:, :, 3] -= X_box[:, :, 1]
 
-        random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list = self.get_random_samples(X_box, Y_cls, Y_regr, iou, iou_list, num_neg, num_pos)
+        random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list = self.get_random_samples(X_box, Y_cls, Y_regr, iou, iou_list, num_neg, num_pos, pos_choice_prob=pos_choice_prob)
 
         #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos
         #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos, pos_neg_result
         return random_X_box, random_Y_cls, random_Y_regr, random_iou, all_iou_list, num_neg, num_pos, pos_neg_result
 
 
-    def get_random_samples(self, X2, Y1, Y2, iou, iou_list, num_neg, num_pos):
+    def get_random_samples(self, X2, Y1, Y2, iou, iou_list, num_neg, num_pos, pos_choice_prob):
         neg_samples = np.arange(0, num_neg)
         pos_samples = np.arange(num_neg, num_neg+num_pos)
         if num_pos > self.ideal_num_pos : 
-            pos_samples= np.random.choice(pos_samples, self.ideal_num_pos, replace=False)
+            pos_samples= np.random.choice(pos_samples, self.ideal_num_pos, replace=False, p=pos_choice_prob)
             num_pos = len(pos_samples)
         num_rest = self.args.num_rois - num_pos
         if num_neg > num_rest :

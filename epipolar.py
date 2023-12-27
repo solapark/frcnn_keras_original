@@ -69,8 +69,8 @@ class EPIPOLAR :
         img_list = [src_reuslt_img, dst_reuslt_img]
         concat_img = utility.get_concat_img(img_list, cols=2)
         resized_concat_img = cv2.resize(concat_img, (640, 360))
-        cv2.imshow('epipolar', resized_concat_img)
-        cv2.waitKey(0)
+        cv2.imwrite('epipolar.jpg', resized_concat_img)
+        #cv2.waitKey(0)
 
     def ext_a2b(self, ext_a, ext_b):
         T_a2r = np.eye(4)
@@ -234,7 +234,8 @@ class EPIPOLAR :
         dist = self.find_dist_line2pnts(epipolar_line, boxes_centers)
         dist /= self.diag
         valid_idx = np.where(dist < self.max_dist_epiline_to_box)
-        return valid_idx
+        #print(dist, self.max_dist_epiline_to_box)
+        return valid_idx, dist
 
     def find_dist_line2pnts(self, line, pnts):
         a, b, c = line

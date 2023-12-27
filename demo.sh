@@ -328,13 +328,23 @@ CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode write_json --dataset MESSYTA
 #test
 CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir 230921/mvdet/test --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_test.json --write_rpn_only --is_use_epipolar
 
-### 3. align rpn with gt id (exclude results which don't belong to any gt) (assign gt class)
+### 3. align rpn with gt id. exclude results which don't belong to any gt. (assign gt class)
+# gt-rpn 1-to-1 matching
 #train
 python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train_aligned_core.json --save_core --assign_gt_class
 #val
 python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/val.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_val.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_val_aligned_core.json --save_core --assign_gt_class
 #test
 python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_test.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_test_aligned_core.json --save_core --assign_gt_class
+
+# gt-rpn 1-to-N matching
+#train
+python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_train.json --one2N --iou_thresh .5
+#val
+python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/val.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_val.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_val.json --one2N --iou_thresh .5
+#test
+python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/test.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_test.json --dst_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_test.json --one2N --iou_thresh .5
+
 
 ### 4. reid input to nuscenes
 #train
@@ -361,6 +371,16 @@ python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data1/sap/Messy
 ### 3. align multiple rpn with gt id (exclude results which don't belong to any gt) (assign gt class)
 #train
 python script/align_with_gt_id.py --gt_path /data1/sap/MessyTable/labels/train.json --src_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_rpn_only_train.json --dst_path /data3/sap/frcnn_keras_original/experiment/231024/mvdet/mvdet_multiple_rpn_only_train_aligned_core.json --save_core --assign_gt_class --save_gt_pos --iou_thresh .3 --multiple_pred
+
+231227 save rpn and gt at the same time. multiple rpn for a gt
+#train
+python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_train.json --type train --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/train  --save_dir /data3/sap/VEDet/data/Messytable/rpn1toN --rpn1toN
+#val
+python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_val.json --type val --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/val  --save_dir /data3/sap/VEDet/data/Messytable/rpn1toN --rpn1toN
+#test
+python -m pdb script/Messytable2Nuscenes_withDLT.py --json_path /data3/sap/frcnn_keras_original/experiment/230921/mvdet/mvdet_1toN_test.json --type test --pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/mvdet/reid_input/test  --save_dir /data3/sap/VEDet/data/Messytable/rpn1toN --rpn1toN
+
+
 
 ### 5. save reid output
 #train
@@ -392,6 +412,8 @@ CUDA_VISIBLE_DEVICES=2 python main.py --reset --mode train --dataset MESSYTABLE 
 CUDA_VISIBLE_DEVICES=2 python main.py --reset --mode train --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn50_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/train/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn50/reid_output/train --num_epochs 100 --save_interval 5 --fair_classifier_gt_choice
 #trmreid rpn59
 CUDA_VISIBLE_DEVICES=2 python main.py --reset --mode train --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/train/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/train --num_epochs 100 --save_interval 5 --fair_classifier_gt_choice
+#trmreid rpn59 th.1
+CUDA_VISIBLE_DEVICES=2 python main.py --reset --mode train --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/train/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59_th.1/reid_output/train --num_epochs 100 --save_interval 5 --fair_classifier_gt_choice
 #trmreid rpn68 ep20 th.1
 CUDA_VISIBLE_DEVICES=2 python main.py --reset --mode train --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn68_ep20_th.1_classifier_only --input_weight_path /data3/sap/frcnn_keras_original/experiment/220516/mv_messytable_fine_tunning_from_model9/model/model_18.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/train.json --is_use_epipolar --freeze_rpn --rpn_pickle_dir pickle/messytable/rpn/train/sv_messytable_cam3_resume_110_model --freeze_ven --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn68_ep20_th.1/reid_output/train --num_epochs 100 --save_interval 5 --fair_classifier_gt_choice
 #trmreid rpn68 ep20 th.01
@@ -428,7 +450,17 @@ CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTA
 #trmreid rpn50
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn50_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn50/reid_output/val
 #trmreid rpn59
+#val
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/val
+#test
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/test.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test
+#trmreid rpn59_th.1
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59_th.1/reid_output/val
+#trmreid rpn59_th.1 mv nms + ep filter
+CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59_th.1/reid_output/val --mv_nms --use_epipolar_filter --max_dist_epiline_to_box .09
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59_th.1/reid_output/val --mv_nms --use_epipolar_filter --max_dist_epiline_to_box .08
+CUDA_VISIBLE_DEVICES=2 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59_th.1/reid_output/val --mv_nms --use_epipolar_filter --max_dist_epiline_to_box 1.
+
 #trmreid rpn68 ep20 th.1
 CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn68_ep20_th.1_classifier_only --val_start_idx 10 --val_interval 5 --dataset_path /data1/sap/MessyTable/labels/val.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/val/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn68_ep20_th.1/reid_output/val
 #trmreid rpn68 ep20 th.01
@@ -440,3 +472,24 @@ CUDA_VISIBLE_DEVICES=0 python -m pdb main.py --mode val_models --dataset MESSYTA
 
 # write json
 CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model/model_35.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model/model_35.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test
+#mv_nms
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model/model_35.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test --mv_nms
+#mv_nms+epi filter
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model/model_35.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms_epipolar_filter.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test --mv_nms --use_epipolar_filter --max_dist_epiline_to_box .08
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model/model_35.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms_epipolar_filter.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test --mv_nms --use_epipolar_filter --max_dist_epiline_to_box .07
+CUDA_VISIBLE_DEVICES=1 python -m pdb main.py --mode write_json --dataset MESSYTABLE --save_dir tmvreid_messytable_rpn59_th.1_classifier_only  --input_weight_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_th.1_classifier_only/model/model_85.hdf5 --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --result_json_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_th.1_classifier_only/model_85_mv_nms_epipolar_filter.08.json --is_use_epipolar --freeze_rpn --freeze_ven --rpn_pickle_dir pickle/messytable/rpn/test/sv_messytable_cam3_resume_110_model --ven_pickle_dir /data3/sap/frcnn_keras_original/pickle/messytable/tmvreid_messytable_rpn59/reid_output/test --mv_nms --use_epipolar_filter --max_dist_epiline_to_box .08
+
+#val_json_json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_no_nms.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_nms2.json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms.json
+#mv_nms+epi filter
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode val_json_json --reset --dataset MESSYTABLE --save_dir val_json_json/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data1/sap/MessyTable/labels/test.json --pred_dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms_epipolar_filter.json
+
+#draw json
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35.json --draw_inst_by_inst
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/tmvreid_messytable_rpn59_classifier_only --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_classifier_only/model_35_mv_nms.json --draw_inst_by_inst
+#mv_nms+epi filter
+CUDA_VISIBLE_DEVICES=-1 python -m pdb main.py --mode draw_json --dataset MESSYTABLE --save_dir drawing/tmvreid_messytable_rpn59_th.1_model_85_mv_nms_epipolar_filter.08 --num_valid_cam 3 --dataset_path /data3/sap/frcnn_keras_original/experiment/tmvreid_messytable_rpn59_th.1_classifier_only/model_85_mv_nms_epipolar_filter.08.json --draw_inst_by_inst
+

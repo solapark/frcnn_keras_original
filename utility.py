@@ -930,7 +930,7 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
-def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, overlap_thresh=0.9, max_boxes=300):
+def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, overlap_thresh=0.9, max_boxes=300, mv_nms=False):
     # boxes : (num_cam, num_box, 4)
     # probs : (num_box, )
     # is_valids : (num_cam, num_box)
@@ -972,7 +972,11 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, 
     area = (x2 - x1) * (y2 - y1) #(num_box, num_cam)
 
     # sort the bounding boxes 
-    idxs = np.argsort(probs) #(num_box,)
+    if mv_nms : 
+        num_valid_views = is_valids.sum(1)
+        idxs = np.lexsort((probs,num_valid_views)) 
+    else : 
+        idxs = np.argsort(probs) #(num_box,)
 
     # keep looping while some indexes still remain in the indexes
     # list
@@ -1000,11 +1004,17 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, 
         overlap = area_int/(area_union + 1e-6) #(num_box, num_cam)
 
         # delete all indexes from the index list that have
-        idxs = np.delete(idxs, np.concatenate(([last],
-            #np.where(np.all(overlap > overlap_thresh, 1))[0])))
-            #np.where(np.any(overlap > overlap_thresh, 1))[0])))
-            #np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
-            np.where(np.sum(overlap > overlap_thresh, 1) > 0)[0])))
+        if mv_nms :
+            num_thresh = np.minimum(num_valid_views[idxs[:last]], 2) 
+            num_big_iou = np.sum(overlap > overlap_thresh, 1)
+            idxs = np.delete(idxs, np.concatenate(([last],
+                np.where(num_big_iou >= num_thresh)[0])))
+        else :
+            idxs = np.delete(idxs, np.concatenate(([last],
+                #np.where(np.all(overlap > overlap_thresh, 1))[0])))
+                #np.where(np.any(overlap > overlap_thresh, 1))[0])))
+                #np.where(np.sum(overlap > overlap_thresh, 1) > 1)[0])))
+                np.where(np.sum(overlap > overlap_thresh, 1) > 0)[0])))
 
         if len(pick) >= max_boxes:
             break
@@ -1031,7 +1041,9 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
     is_valids_list = is_valids_list[::-1]
     iou_list = iou_list[::-1]
     pos_neg_result_list = pos_neg_result_list[::-1]
+    cnt = 1
     for boxes, is_valids, ious, pos_neg_result in zip(boxes_list, is_valids_list, iou_list, pos_neg_result_list) :
+        if pos_neg_result == 'ignore' : continue
         img_list = []
         for cam_idx, (box, is_valid, iou)  in enumerate(zip(boxes, is_valids, ious)):
             color = (0, 0, 255) if is_valid  else (0, 0, 0) 
@@ -1045,8 +1057,10 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
         textOrg = (20, 20)
         cv2.putText(conc_img, pos_neg_result, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
-        cv2.imshow('reid_result', conc_img)
-        cv2.waitKey(0)
+        cv2.imwrite('/data3/sap/frcnn_keras_original/reid_result%03d.png'%(cnt), conc_img)
+        #cv2.imshow('reid_result', conc_img)
+        #cv2.waitKey(0)
+        cnt += 1
 
 def draw_inst(img, x1, y1, x2, y2, cls, color, prob=None, inst_num = None, emb_dist=None, is_valid=None):
     cv2.rectangle(img,(x1, y1), (x2, y2), color, 4)

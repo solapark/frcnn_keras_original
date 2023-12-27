@@ -13,6 +13,7 @@ from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
 from reid.reid import REID
 from reid.reid_gt_calculator import REID_GT_CALCULATOR
 from gt.classifier_gt_calculator import CLASSIFIER_GT_CALCULATOR
+from reid.epipolar_filter import EPIPOLAR_FILTER
 
 import utility
 import tmp
@@ -56,6 +57,9 @@ class MV_FRCNN:
         self.classifier_gt_calculator = CLASSIFIER_GT_CALCULATOR(args)
 
         self.cam_idx_arr = np.repeat(np.arange(self.args.num_valid_cam), self.args.num_nms).reshape(self.args.num_valid_cam, self.args.num_nms, 1)
+
+        if self.args.use_epipolar_filter : 
+            self.epipolar_filter = EPIPOLAR_FILTER(args)
        
     def save(self, path):
         self.model_all.save_weights(path)
@@ -323,12 +327,18 @@ class MV_FRCNN:
 
                 if jk == num_reid_intsts // self.args.num_rois:
                     # pad R
-                    curr_shape = ROIs.shape
-                    target_shape = (curr_shape[0], self.args.num_rois, curr_shape[2])
+                    curr_shape = ROIs.shape #(1,1,4)
+                    target_shape = (curr_shape[0], self.args.num_rois, curr_shape[2]) #(1,4,4)
                     ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
                     ROIs_padded[:, :curr_shape[1], :] = ROIs
                     ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
                     ROIs = ROIs_padded
+
+                    EMB_DISTs_padded = np.tile(EMB_DISTs[0, 0], (1, self.args.num_rois-curr_shape[1]))
+                    EMB_DISTs = np.concatenate([EMB_DISTs, EMB_DISTs_padded], -1)
+
+                    IS_VALIDs_padded = np.tile(IS_VALIDs[0, 0], (1, self.args.num_rois-curr_shape[1]))
+                    IS_VALIDs = np.concatenate([IS_VALIDs, IS_VALIDs_padded], -1)
 
                 ROIs_list.append(ROIs)
                 EMB_DISTs_list.append(EMB_DISTs)
@@ -365,7 +375,7 @@ class MV_FRCNN:
             cur_is_valids = np.array(is_valids[key])
             cur_emb_dists = np.array(emb_dists[key])
             if is_exclude_bg : 
-                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, overlap_thresh=self.args.classifier_nms_thresh)
+                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, overlap_thresh=self.args.classifier_nms_thresh, mv_nms=self.args.mv_nms)
             else :
                 new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists
 
@@ -445,6 +455,16 @@ class MV_FRCNN:
 
 
     def predict_batch(self, X, debug_img, extrins, rpn_result, ven_result):
+        '''
+        from time import time
+        start = time()
+        pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = self.rpn_predict_batch(X, debug_img)
+        reid_box_pred_batch, is_valid_batch, all_box_emb_batch, emb_dist_batch = self.extract_ven_feature(shared_feats, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
+        all_dets = self.classifier_predict_batch(shared_feats, np.copy(reid_box_pred_batch), is_valid_batch, emb_dist_batch, debug_img)
+        end = time()
+        print('time elapsed:', end - start)
+        '''
+        
         if self.args.freeze_rpn :
             pred_box_idx_batch, pred_box_batch, pred_box_prob_batch, shared_feats = rpn_result[0]
         else :
@@ -452,9 +472,13 @@ class MV_FRCNN:
 
         if self.args.freeze_ven :
             reid_box_pred_batch, is_valid_batch = ven_result[0]
+            emb_dist_batch = np.zeros_like(is_valid_batch)
         else :
             reid_box_pred_batch, is_valid_batch, all_box_emb_batch, emb_dist_batch = self.extract_ven_feature(shared_feats, debug_img, extrins, pred_box_idx_batch, pred_box_batch, pred_box_prob_batch)
 
+        if self.args.use_epipolar_filter : 
+            reid_box_pred_batch, is_valid_batch, emb_dist_batch = self.epipolar_filter.get_batch(reid_box_pred_batch, is_valid_batch, emb_dist_batch, extrins, np.array(debug_img).transpose(1, 0, 2, 3, 4))
+            
         all_dets = self.classifier_predict_batch(shared_feats, np.copy(reid_box_pred_batch), is_valid_batch, emb_dist_batch, debug_img)
 
         #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride)

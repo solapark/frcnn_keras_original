@@ -53,7 +53,8 @@ def train(args, model, log_manager, img_preprocessor, train_dataloader, val_data
             timer_data.tic()
         log_manager.epoch_done()
     
-        model.save(model_path_manager.get_path('%d'%(epoch_num)))
+        if epoch_num % args.save_interval ==0 :
+            model.save(model_path_manager.get_path('%d'%(epoch_num)))
 
 def calc_map(args, model, log_manager, img_preprocessor, dataloader):
     map_calculator = evaluation.Map_calculator(args)
@@ -102,8 +103,6 @@ def calc_map(args, model, log_manager, img_preprocessor, dataloader):
         log_manager.write_log('%s\t%.2f'%(cls, prob*100))
     log_manager.write_log('\n')
     '''
-
-    return cur_map
 
 def val_models(args, model, log_manager, img_preprocessor, val_dataloader):
     model_path_manager = utility.Model_path_manager(args)
@@ -160,6 +159,7 @@ def write_json(args, model, img_preprocessor, dataloader):
 
         json_writer.write(all_dets, image_paths)
         progbar.update(idx+1)
+        if(idx==50) : break
 
     json_writer.close()
 

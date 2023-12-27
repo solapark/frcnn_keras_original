@@ -54,6 +54,10 @@ def mv_DLT(Ps, pnts):
     return Vh[3,0:3]/Vh[3,3]
 
 def fill_infos(all_scene_ids, json):
+    xyz_max = np.array([-1e9]*3)
+    xyz_min = np.array([1e9]*3)
+    xyz = []
+
     infos = []
     camera_types = [
         '1',
@@ -71,7 +75,8 @@ def fill_infos(all_scene_ids, json):
 
     for scene_id in all_scene_ids :
         instance_summary = json.get_instance_summary(scene_id)
-        num_inst = len(instance_summary)
+        #num_inst = len(instance_summary) if args.rpn else args.num_inst
+        num_inst = len(instance_summary) 
         inst_ids = list(instance_summary.keys())
         info = {
             'scene_id': scene_id,
@@ -79,15 +84,19 @@ def fill_infos(all_scene_ids, json):
             'pickle_path': os.path.join(args.pickle_dir, '%s.pickle'%(scene_id)),
             'cams': dict(),
             'valid_flags': np.ones((num_inst,)),
+            'is_filled': np.zeros((num_inst,)),
             'gt_ids' : inst_ids, 
             'gt_names' : None, #inst classes
             'cam_instances' : dict(),
             'cam_instances_valid_flags' : dict(),
             'inst_3dp' : None, #(num_inst, 3) #cx,cy,cz
             'inst_proj_2dp' : None, #(num_inst, num_cam, 2) #cx,cy
+            'pred_box_idx_org' : None, #(num_inst, num_cam) #cam1_idx,cam2_idx,cam3_idx
             'pred_box_idx' : None, #(num_inst, num_cam) #cam1_idx,cam2_idx,cam3_idx
             'probs' : None #(num_inst, num_cam) 
         }
+
+        info['is_filled'][:len(inst_ids)] = 1
 
         gt_names = [class_names[class_ids.index(cls)] for cls in instance_summary.values()]
         info.update(gt_names = gt_names)
@@ -99,6 +108,11 @@ def fill_infos(all_scene_ids, json):
         cam_instances_valid_flags_list = []
         pred_box_idx_list = []
         prob_list = []
+
+        rp_pred_idx_list = []
+        rp_pos_list = []
+        rp_iou_list = []
+        rp_prob_list = []
         for cam_id in all_cam_idx:
             intrinsic = intrinsics[cam_id]
             K = np.eye(4)
@@ -129,6 +143,10 @@ def fill_infos(all_scene_ids, json):
             pred_box_idx = -np.ones((num_inst, ))
             probs = -np.ones((num_inst, ))
 
+            rp_pred_idx = [[] for _ in range(num_inst)]
+            rp_pos = [[] for _ in range(num_inst)]
+            rp_ious = [[] for _ in range(num_inst)]
+            rp_probs = [[] for _ in range(num_inst)]
             for instance in instances :
                 inst_id = instance['inst_id']
                 inst_idx = inst_ids.index(inst_id)
@@ -136,18 +154,47 @@ def fill_infos(all_scene_ids, json):
                 cx, cy, w, h = (x1+x2)/2, (y1+y2)/2, x2-x1, y2-y1
                 cam_instances[inst_idx] = cx, cy, w, h
                 cam_instances_valid_flags[inst_idx] = 1
-                pred_box_idx[inst_idx] = int(instance['pred_id'])
-                probs[inst_idx] = instance['prob']
+                pred_box_idx[inst_idx] = int(inst_id)-1
+                probs[inst_idx] = 1.
+
+                if args.rpn :
+                    pred_box_idx[inst_idx] = int(instance['pred_id']) 
+                    probs[inst_idx] = instance['prob'] 
+
+                elif args.rpn1toN :
+                    if 'rp' in instance : 
+                        for _, rp in instance['rp'].items() : 
+                            rp_pred_idx[inst_idx].append(int(rp['id']))
+                            x1,y1,x2,y2 = rp['pos']
+                            cx, cy, w, h = (x1+x2)/2, (y1+y2)/2, x2-x1, y2-y1
+                            rp_pos[inst_idx].append([cx, cy, w, h])
+                            rp_ious[inst_idx].append(rp['iou'])
+                            rp_probs[inst_idx].append(rp['prob'])
 
             cam_instances_list.append(cam_instances)
             cam_instances_valid_flags_list.append(cam_instances_valid_flags)
             pred_box_idx_list.append(pred_box_idx)
             prob_list.append(probs)
 
+            rp_pred_idx_list.append(rp_pred_idx)
+            rp_pos_list.append(rp_pos)
+            rp_iou_list.append(rp_ious)
+            rp_prob_list.append(rp_probs)
+
         info.update(cam_instances = np.stack(cam_instances_list, axis=0))
         info.update(cam_instances_valid_flags = np.stack(cam_instances_valid_flags_list, axis=0))
-        info.update(pred_box_idx = np.stack(pred_box_idx_list, axis=0).transpose(1,0))
-        info.update(probs = np.stack(prob_list, axis=0))
+
+        if args.rpn :
+            info.update(pred_box_idx = np.stack(pred_box_idx_list, axis=0).transpose(1,0))
+            info.update(pred_box_idx_org = np.stack(pred_box_idx_list, axis=0).transpose(1,0))
+            info.update(probs = np.stack(prob_list, axis=0))
+
+        elif args.rpn1toN :
+            info.update(rp_pred_idx = rp_pred_idx_list) #(num_cam, num_inst, num_rpn[var])
+            info.update(rp_pos = rp_pos_list) #(num_cam, num_inst, num_rpn[var], 4)
+            info.update(rp_iou = rp_iou_list) #(num_cam, num_inst, num_rpn[var])
+            info.update(rp_prob = rp_prob_list) #(num_cam, num_inst, num_rpn[var])
+
         #print(info)
 
         inst_3dp_list = []
@@ -174,6 +221,12 @@ def fill_infos(all_scene_ids, json):
             pnts = np.stack(pnts, 0)
             
             inst_3dp = mv_DLT(Ps, pnts)
+            xyz.append(inst_3dp)
+            xyz_max = np.maximum(xyz_max, inst_3dp)
+            xyz_min = np.minimum(xyz_min, inst_3dp)
+            #print('inst_3dp', inst_3dp)
+            #print('xyz_max', xyz_max)
+            #print('xyz_min', xyz_min)
             homo_3dp = np.concatenate([inst_3dp, [1]]).reshape((4, 1))
             
             inst_2dp_list_in_cams = []
@@ -196,8 +249,8 @@ def fill_infos(all_scene_ids, json):
 
 
         if args.debug :
-            cxcywh = info['cam_instances'] #(num_cam, num_inst, 4)
-            est_cxcy = info['inst_proj_2dp'].transpose(1,0,2) #(num_cam, num_inst, 4)
+            cxcywh = info['cam_instances'][:, :len(inst_ids)] #(num_cam, num_inst, 4)
+            est_cxcy = info['inst_proj_2dp'].transpose(1,0,2)[:, :len(inst_ids)] #(num_cam, num_inst, 4)
 
             # List of image paths for all cameras
             image_paths = [info['cams'][cam_id]['img_path'] for cam_id in all_cam_idx]
@@ -228,9 +281,9 @@ def fill_infos(all_scene_ids, json):
 
             print("Stacked image saved at:", output_path)
 
-
         infos.append(info)
 
+    xyz = np.array(xyz)
     return infos
 
 if __name__ == '__main__' :
@@ -251,6 +304,9 @@ if __name__ == '__main__' :
     parser.add_argument("--debug", action="store_true", default=False)
     parser.add_argument("--debug_img_save_dir", default = '/data3/sap/frcnn_keras_original/DLT_debug')
     parser.add_argument("--debug_img_save_ratio", default = .3)
+    parser.add_argument("--rpn", action="store_true", default=False)
+    parser.add_argument("--rpn1toN", action="store_true", default=False)
+    parser.add_argument("--num_inst", default=100)
 
     args = parser.parse_args()
 
@@ -269,9 +325,10 @@ if __name__ == '__main__' :
     metadata = dict(version='v1.0-trainval')
     data = dict(infos=infos, metadata=metadata)
     info_path = os.path.join(args.save_dir, 'messytable_infos_{}.pkl'.format(args.type))
+    
 
-    os.makedirs(args.save_dir, exist_ok=True)
-    with open(info_path, 'wb') as f:
-        pickle.dump(data, f)
+    #os.makedirs(args.save_dir, exist_ok=True)
+    #with open(info_path, 'wb') as f:
+    #    pickle.dump(data, f)
 
 

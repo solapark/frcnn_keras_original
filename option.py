@@ -46,6 +46,7 @@ parser.add_argument("--print_every", default=10, type=int, help="print every ite
 
 #train_spec
 parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
+parser.add_argument("--save_interval", type=int, help="Interval of epochs to save.", default=1)
 parser.add_argument("--epoch_length", type=int, help="iters per epoch")
 parser.add_argument("--input_weight_path", dest="input_weight_path", help="Input path for weights. If not specified, will try to load default weights provided by keras.")
 parser.add_argument("--output_weight_path", help="Ouput path for weights of sv model.")
@@ -114,6 +115,7 @@ parser.add_argument('--reid_min_emb_dist', type=float, default=.5, help='minimum
 #parser.add_argument('--max_dist_epiline_to_box', type=float, default=.01, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar line')
 parser.add_argument('--max_dist_epiline_cross_to_box', type=float, default=.05, help='valid maximum distance from target box to epipolar cross line')
+parser.add_argument('--use_epipolar_filter', action="store_true", default=False)
 
 
 #reid_gt
@@ -124,11 +126,13 @@ parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minim
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
 parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
 parser.add_argument('--classifier_nms_thresh', type=float, default=.3)
+parser.add_argument("--mv_nms", action="store_true", default=False)
 
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
 parser.add_argument('--classifier_max_overlap', type=float, default=.4, help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='threshold for negative sample')
+parser.add_argument("--fair_classifier_gt_choice", help="fair choie of gt", action="store_true", default=False)
 
 #drawing
 parser.add_argument("--draw_inst_by_inst", help="draw one inst in one image.", action="store_true", default=False)
