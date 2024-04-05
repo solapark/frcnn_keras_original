@@ -13,6 +13,7 @@ from gt.rpn_gt_calculator import RPN_GT_CALCULATOR
 from reid.reid import REID
 from reid.reid_gt_calculator import REID_GT_CALCULATOR
 from gt.classifier_gt_calculator import CLASSIFIER_GT_CALCULATOR
+from gt.data_augment import AUGMENT
 from reid.epipolar_filter import EPIPOLAR_FILTER
 
 import utility
@@ -61,6 +62,9 @@ class MV_FRCNN:
         if self.args.use_epipolar_filter : 
             self.epipolar_filter = EPIPOLAR_FILTER(args)
        
+        if self.args.augment :
+            self.Augment = AUGMENT(args)
+
     def save(self, path):
         self.model_all.save_weights(path)
 
@@ -293,6 +297,11 @@ class MV_FRCNN:
         return reid_box_pred_batch, is_valid_batch, all_box_emb_batch, emb_dist_batch
 
     def classifier_predict_batch(self, F_list, reid_box_pred_batch, is_valid_batch, emb_dist_batch, debug_img):
+        if self.args.unique_sample :
+            reid_box_pred_batch, unique_idx = np.unique(reid_box_pred_batch, return_index=True, axis=1)
+            is_valid_batch = is_valid_batch[:, unique_idx]
+            emb_dist_batch = emb_dist_batch[:, unique_idx]
+
         is_exclude_bg = not self.args.write_bg
         # convert from (x1,y1,x2,y2) to (x,y,w,h)
         reid_box_pred_batch[:, :, :, 2] -= reid_box_pred_batch[:, :, :, 0]
@@ -366,69 +375,11 @@ class MV_FRCNN:
                     emb_dists[cls_name][cam_idx].extend(cur_emb_dists[cls_name][cam_idx])
                 probs[cls_name].extend(cur_probs[cls_name])
 
-        all_dets = [[] for _ in range(self.args.num_valid_cam)]
-        inst_idx = 1
-        for key in bboxes:
-            cur_bboxes = np.array(bboxes[key])
-            if not cur_bboxes.size : continue
-            cur_probs = np.array(probs[key])
-            cur_is_valids = np.array(is_valids[key])
-            cur_emb_dists = np.array(emb_dists[key])
-            if is_exclude_bg : 
-                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, overlap_thresh=self.args.classifier_nms_thresh, mv_nms=self.args.mv_nms)
-            else :
-                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists
+        all_dets = utility.format_mv_output(bboxes, is_valids, emb_dists, probs, self.args.num_valid_cam, False, self.args.classifier_nms_thresh, False, is_exclude_bg)
 
-            for jk in range(new_boxes_all_cam.shape[1]):
-                for cam_idx in range(self.args.num_valid_cam) : 
-                    (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
-                    is_valid = new_is_valids_all_cam[cam_idx, jk]
-                    emb_dist = new_emb_dists_all_cam[cam_idx, jk]
-                    if not is_valid : 
-                        continue
-                    #if(x1 == -self.args.rpn_stride) :
-                    #    continue 
-                    det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk], 'inst_idx': inst_idx, 'emb_dist': emb_dist, 'is_valid':is_valid}
-                    all_dets[cam_idx].append(det)
-                inst_idx += 1
-        '''
-
-        cur_bboxes = []
-        cur_probs = []
-        cur_is_valids = []
-        cur_classes = []
-        for key in bboxes:
-            c_bboxes = np.array(bboxes[key])
-            if not c_bboxes.size : continue
-            c_probs = np.array(probs[key])
-            c_is_valids = np.array(is_valids[key])
-            c_classes = np.repeat(key, len(c_probs))
-
-            cur_bboxes.append(c_bboxes)
-            cur_probs.append(c_probs)
-            cur_is_valids.append(c_is_valids)
-            cur_classes.append(c_classes)
-
-        cur_bboxes = np.concatenate(cur_bboxes, 1)
-        cur_probs = np.concatenate(cur_probs)
-        cur_is_valids = np.concatenate(cur_is_valids, 1)
-        cur_classes = np.concatenate(cur_classes)
-
-        new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_classes = utility.non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_classes, overlap_thresh=self.args.classifier_nms_thresh)
-
-        inst_idx = 1
-        for jk in range(new_boxes_all_cam.shape[1]):
-            for cam_idx in range(self.args.num_valid_cam) : 
-                (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
-                is_valid = new_is_valids_all_cam[cam_idx, jk]
-                if not is_valid : 
-                    continue
-                #if(x1 == -self.args.rpn_stride) :
-                #    continue 
-                det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': new_classes[jk], 'prob': new_probs[jk], 'inst_idx': inst_idx}
-                all_dets[cam_idx].append(det)
-            inst_idx += 1
-        '''
+        if self.args.inter_cls_mv_nms :
+            bboxes, is_valids, emb_dists, probs = utility.all_dets2raw(all_dets, self.args)
+            all_dets = utility.format_mv_output(bboxes, is_valids, emb_dists, probs, self.args.num_valid_cam, True, self.args.classifier_inter_cls_mv_nms_thresh, True, is_exclude_bg)
 
         return all_dets
 
@@ -617,10 +568,18 @@ class MV_FRCNN:
         return vi_loss
 
     def classifier_train_batch(self, inputs, reid_box_pred_batch, is_valid_batch, Y, debug_img):
-        X2, Y1, Y2, iou, iou_list, num_neg_samples, num_pos_samples, pos_neg_result = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
+        if self.args.unique_sample :
+            reid_box_pred_batch, unique_idx = np.unique(reid_box_pred_batch, return_index=True, axis=1)
+            is_valid_batch = is_valid_batch[:, unique_idx]
+
+        if self.args.augment : 
+            inputs, reid_box_pred_batch, Y = self.Augment.augment(inputs, reid_box_pred_batch, Y, is_valid_batch)
+
+        X2, Y1, Y2, iou, iou_list, num_neg_samples, num_pos_samples, pos_neg_result, sel_idx = self.classifier_gt_calculator.get_batch(reid_box_pred_batch, is_valid_batch, Y)
         loss = np.zeros((2, ))
 
         #utility.draw_reid(reid_box_pred_batch, is_valid_batch, debug_img, self.args.rpn_stride, iou_list, pos_neg_result)
+        #utility.draw_reid(reid_box_pred_batch[:, sel_idx[0]], is_valid_batch[:, sel_idx[0]], debug_img, self.args.rpn_stride, iou_list[:, sel_idx[0]], pos_neg_result[:, sel_idx[0]])
         if X2.shape[1] == self.args.num_rois:
             X2_list = list(X2.transpose(2, 0, 1, 3))
             loss = self.model_classifier.train_on_batch(inputs+X2_list, [Y1, Y2])

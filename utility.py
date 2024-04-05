@@ -50,22 +50,23 @@ def mv_iou(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids):
     is_neg = False
     valid_iou_list = []
     iou_list = []
-    for pred_box, gt_box, pred_is_valid, gt_is_valid in zip(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids):
+    valid_list = []
+    for i, (pred_box, gt_box, pred_is_valid, gt_is_valid) in enumerate(zip(pred_boxes, gt_boxes, pred_is_valids, gt_is_valids)):
         if pred_is_valid :
             if gt_is_valid  :
                 cur_iou = iou(pred_box, gt_box) 
                 valid_iou_list.append(cur_iou)
+                valid_list.append(i)
             else :
                 cur_iou = 0
                 is_neg = True
-
         else :
             cur_iou = None
 
         iou_list.append(cur_iou)
 
     mean_iou = sum(valid_iou_list) / len(valid_iou_list) if len(valid_iou_list) else 0
-    return mean_iou, iou_list, valid_iou_list, is_neg
+    return mean_iou, iou_list, valid_iou_list, valid_list, is_neg
 
 '''
 def mv_iou(boxes_a, boxes_b, is_valids_a, is_valids_b):
@@ -261,7 +262,7 @@ class Log_manager:
         return os.path.join(self.dir, *subdir)
 
     def get_log_file(self):
-        self.log_file_name = 'log_%s.txt' % (self.args.mode)
+        self.log_file_name = 'log_%s_%s.txt' % (self.args.mode, self.args.val_models_log_name)
         open_type = 'a' if os.path.exists(self.get_path(self.log_file_name))else 'w'
         log_file = open(self.get_path(self.log_file_name), open_type)
         return log_file
@@ -930,7 +931,7 @@ def get_min_emb_dist_idx(emb, embs, thresh = np.zeros(0), is_want_dist = 0):
         return min_dist_idx, min_dist
     return min_dist_idx
 
-def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, overlap_thresh=0.9, max_boxes=300, mv_nms=False):
+def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, classes=None, overlap_thresh=0.9, max_boxes=300, mv_nms=False):
     # boxes : (num_cam, num_box, 4)
     # probs : (num_box, )
     # is_valids : (num_cam, num_box)
@@ -1022,14 +1023,19 @@ def non_max_suppression_fast_multi_cam(boxes, probs, is_valids, emb_dists=None, 
     # return only the bounding boxes that were picked using the integer data type
     boxes = boxes[pick].astype("int").transpose(1, 0, 2) #(num_cam, num_box, 4)
     is_valids = is_valids[pick].transpose(1, 0)
-    if emb_dists is not None: 
-        emb_dists = emb_dists[pick].transpose(1, 0)
     probs = probs[pick]
 
+    result = [boxes, probs, is_valids]
+
     if emb_dists is not None: 
-        return boxes, probs, is_valids, emb_dists
-    else :
-        return boxes, probs, is_valids
+        emb_dists = emb_dists[pick].transpose(1, 0)
+        result.append(emb_dists)
+
+    if classes is not None: 
+        classes = classes[pick]
+        result.append(classes)
+
+    return result
 
 def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch, pos_neg_result_batch) : 
     boxes_list = boxes_batch[0].astype(int)*rpn_stride  #(300, num_cam, 4)
@@ -1037,13 +1043,12 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
     iou_list = iou_list_batch[0] #(300, num_cam)
     pos_neg_result_list = pos_neg_result_batch[0] #(300, num_cam)
 
-    boxes_list = boxes_list[::-1]
-    is_valids_list = is_valids_list[::-1]
-    iou_list = iou_list[::-1]
-    pos_neg_result_list = pos_neg_result_list[::-1]
+    #boxes_list = boxes_list[::-1]
+    #is_valids_list = is_valids_list[::-1]
+    #iou_list = iou_list[::-1]
+    #pos_neg_result_list = pos_neg_result_list[::-1]
     cnt = 1
     for boxes, is_valids, ious, pos_neg_result in zip(boxes_list, is_valids_list, iou_list, pos_neg_result_list) :
-        if pos_neg_result == 'ignore' : continue
         img_list = []
         for cam_idx, (box, is_valid, iou)  in enumerate(zip(boxes, is_valids, ious)):
             color = (0, 0, 255) if is_valid  else (0, 0, 0) 
@@ -1057,7 +1062,7 @@ def draw_reid(boxes_batch, is_valid_batch, debug_img, rpn_stride, iou_list_batch
         textOrg = (20, 20)
         cv2.putText(conc_img, pos_neg_result, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
-        cv2.imwrite('/data3/sap/frcnn_keras_original/reid_result%03d.png'%(cnt), conc_img)
+        cv2.imwrite('/data3/sap/frcnn_keras_original/reid_result/%03d.png'%(cnt), conc_img)
         #cv2.imshow('reid_result', conc_img)
         #cv2.waitKey(0)
         cnt += 1
@@ -1319,8 +1324,7 @@ class Json_writer :
                 cls_idx = self.class_mapping[cls] 
                 self.jm.insert_instance(scene_num, cam_num, inst_idx, cls_idx, x1, y1, x2, y2, prob) 
                 self.jm.insert_instance_summary(scene_num, inst_idx, cls_idx)
-                if self.args.write_is_valid :
-                    self.jm.insert_is_valid(scene_num, cam_num, inst_idx, det['is_valid'])
+                self.jm.insert_is_valid(scene_num, cam_num, inst_idx, det['is_valid'])
 
                 if self.args.write_emb_dist :
                     self.jm.insert_emb_dist(scene_num, cam_num, inst_idx, det['emb_dist'])
@@ -1340,3 +1344,123 @@ class Det_resizer :
                 x1, y1, x2, y2 = det['x1'], det['y1'], det['x2'], det['y2']
 
                 det['x1'], det['y1'], det['x2'], det['y2'] = [round(p/self.args.resize_ratio) for p in [x1, y1, x2, y2]]
+
+def format_mv_output(bboxes, is_valids, emb_dists, probs, num_valid_cam, inter_class_nms, classifier_nms_thresh, mv_nms, is_exclude_bg) : 
+    all_dets = [[] for _ in range(num_valid_cam)]
+    inst_idx = 1
+    if inter_class_nms :
+        cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, cur_classes = [], [], [], [], []
+        for key in bboxes :
+            if np.array(bboxes[key]).size :
+                cur_bboxes.append(bboxes[key])
+                cur_probs.append(probs[key])
+                cur_is_valids.append(is_valids[key])
+                cur_emb_dists.append(emb_dists[key])
+                cur_classes.append([key]*len(probs[key]))
+        cur_bboxes = np.concatenate(cur_bboxes, 1)
+        cur_probs = np.concatenate(cur_probs)
+        cur_is_valids = np.concatenate(cur_is_valids, 1)
+        cur_emb_dists = np.concatenate(cur_emb_dists, 1)
+        cur_classes = np.concatenate(cur_classes)
+
+        if is_exclude_bg : 
+            new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam, new_classes = non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, cur_classes, overlap_thresh=classifier_nms_thresh, mv_nms=mv_nms)
+        else :
+            new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam, new_classes = cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, cur_classes
+
+        for jk in range(new_boxes_all_cam.shape[1]):
+            for cam_idx in range(num_valid_cam) : 
+                (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
+                is_valid = new_is_valids_all_cam[cam_idx, jk]
+                emb_dist = new_emb_dists_all_cam[cam_idx, jk]
+                if not is_valid : 
+                    continue
+                #if(x1 == -self.args.rpn_stride) :
+                #    continue 
+                det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': new_classes[jk], 'prob': new_probs[jk], 'inst_idx': inst_idx, 'emb_dist': emb_dist, 'is_valid':is_valid}
+                all_dets[cam_idx].append(det)
+            inst_idx += 1
+
+    else : 
+        for key in bboxes:
+            cur_bboxes = np.array(bboxes[key])
+            if not cur_bboxes.size : continue
+            cur_probs = np.array(probs[key])
+            cur_is_valids = np.array(is_valids[key])
+            cur_emb_dists = np.array(emb_dists[key])
+            if is_exclude_bg : 
+                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = non_max_suppression_fast_multi_cam(cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists, overlap_thresh=classifier_nms_thresh, mv_nms=mv_nms)
+            else :
+                new_boxes_all_cam, new_probs, new_is_valids_all_cam, new_emb_dists_all_cam = cur_bboxes, cur_probs, cur_is_valids, cur_emb_dists
+
+            for jk in range(new_boxes_all_cam.shape[1]):
+                for cam_idx in range(num_valid_cam) : 
+                    (x1, y1, x2, y2) = new_boxes_all_cam[cam_idx, jk]
+                    is_valid = new_is_valids_all_cam[cam_idx, jk]
+                    emb_dist = new_emb_dists_all_cam[cam_idx, jk]
+                    if not is_valid : 
+                        continue
+                    #if(x1 == -self.args.rpn_stride) :
+                    #    continue 
+                    det = {'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': key, 'prob': new_probs[jk], 'inst_idx': inst_idx, 'emb_dist': emb_dist, 'is_valid':is_valid}
+                    all_dets[cam_idx].append(det)
+                inst_idx += 1
+    return all_dets
+
+def all_dets2raw(all_dets, args):
+    bboxes = np.zeros((3000, args.num_valid_cam, 4)) 
+    is_valids = np.zeros((3000, args.num_valid_cam))
+    probs = np.zeros((3000,))
+    emb_dists = np.zeros((3000, args.num_valid_cam))
+    class_names = np.empty((3000,), dtype='S20')
+
+    # Iterate over each camera's detections
+    max_inst_idx = -1
+    for cam_idx, cam_dets in enumerate(all_dets):
+        for det in cam_dets:
+            inst_idx = det['inst_idx']
+            max_inst_idx = max(inst_idx, max_inst_idx)
+            class_names[inst_idx] = det['class']
+            bboxes[inst_idx, cam_idx] = [det['x1'], det['y1'], det['x2'], det['y2']]
+            is_valids[inst_idx, cam_idx] = 1
+            emb_dists[inst_idx, cam_idx] = det['emb_dist']
+            probs[inst_idx] = det['prob']
+
+    bboxes = bboxes[1:max_inst_idx+1]
+    is_valids = is_valids[1:max_inst_idx+1]
+    probs = probs[1:max_inst_idx+1]
+    emb_dists = emb_dists[1:max_inst_idx+1]
+    class_names = class_names[1:max_inst_idx+1]
+
+    all_classes = args.class_mapping_without_bg.keys()
+    final_bboxes = {cls_name : [ [] for _ in range(args.num_valid_cam) ] for cls_name in all_classes}
+    final_is_valids = {cls_name : [ [] for _ in range(args.num_valid_cam) ] for cls_name in all_classes}
+    final_probs = {cls_name : [] for cls_name in all_classes}
+    final_emb_dists = {cls_name : [ [] for _ in range(args.num_valid_cam) ] for cls_name in all_classes}
+
+    for i in range(len(class_names)) :
+        class_name = class_names[i].decode('utf-8')
+        if class_name == 'bg' : continue
+        for cam_idx in range(args.num_valid_cam) :
+            final_bboxes[class_name][cam_idx].append(bboxes[i, cam_idx])
+            final_is_valids[class_name][cam_idx].append(is_valids[i, cam_idx])
+            final_emb_dists[class_name][cam_idx].append(emb_dists[i, cam_idx])
+        final_probs[class_name].append(probs[i])
+
+    return final_bboxes, final_is_valids, final_emb_dists, final_probs
+
+def json_nms(all_dets, args) :
+    bboxes, is_valids, emb_dists, probs = all_dets2raw(all_dets, args)
+    
+    if args.sv_nms : 
+        all_dets = format_mv_output(bboxes, is_valids, emb_dists, probs, args.num_valid_cam, False, args.classifier_nms_thresh, False, True)
+        bboxes, is_valids, emb_dists, probs = all_dets2raw(all_dets, args)
+
+    if args.mv_nms : 
+        all_dets = format_mv_output(bboxes, is_valids, emb_dists, probs, args.num_valid_cam, False, args.classifier_mv_nms_thresh, True, True) 
+        bboxes, is_valids, emb_dists, probs = all_dets2raw(all_dets, args)
+
+    if args.inter_cls_mv_nms : 
+        all_dets = format_mv_output(bboxes, is_valids, emb_dists, probs, args.num_valid_cam, True, args.classifier_inter_cls_mv_nms_thresh, True, True) 
+
+    return all_dets

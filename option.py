@@ -20,7 +20,7 @@ parser.add_argument('--num_nms', type=int, default=300)
 parser.add_argument('--batch_size', type=int, default=1)
 
 #dataset
-parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'])
+parser.add_argument("--dataset", choices = ['INTERPARK18', 'MESSYTABLE'], default='MESSYTABLE')
 parser.add_argument("--dataset_path", help="Path to dataset.")
 parser.add_argument("--pred_dataset_path", help="Path to dataset.")
 parser.add_argument("--pred_dataset_path1", help="Path to dataset for comp json.")
@@ -36,17 +36,19 @@ parser.add_argument("--parser_type", help="Parser to use. One of simple or pasca
 parser.add_argument("--messytable_img_dir", default="/data1/sap/MessyTable/images")
 
 #augment
-parser.add_argument("-hf", '--use_horizontal_flips', help="Augment with horizontal flips in training. (Default=false).", action="store_true", default=False)
-parser.add_argument("-vf", '--use_vertical_flips', help="Augment with vertical flips in training. (Default=false).", action="store_true", default=False)
-parser.add_argument("-rot", "--rot_90", help="Augment with 90 degree rotations in training. (Default=false).", action="store_true", default=False)
+parser.add_argument("--augment", help="Augment. (Default=false).", action="store_true", default=False)
+parser.add_argument("--hf", help="Augment with horizontal flips in training. (Default=false).", action="store_true", default=False)
+parser.add_argument("--vf", help="Augment with vertical flips in training. (Default=false).", action="store_true", default=False)
+parser.add_argument("--rot", help="Augment with 90 degree rotations in training. (Default=false).", action="store_true", default=False)
 
 #log
 parser.add_argument("--loss_log", default=['rpn_cls', 'rpn_regr', 'ven', 'cls_cls', 'cls_regr', 'all'], help="names of losses to log")
-parser.add_argument("--print_every", default=10, type=int, help="print every iter")
+parser.add_argument("--print_every", default=100, type=int, help="print every iter")
+parser.add_argument("--val_models_log_name", default='', type=str, help="val models log file name")
 
 #train_spec
-parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=2000)
-parser.add_argument("--save_interval", type=int, help="Interval of epochs to save.", default=1)
+parser.add_argument("--num_epochs", type=int, help="Number of epochs.", default=100)
+parser.add_argument("--save_interval", type=int, help="Interval of epochs to save.", default=5)
 parser.add_argument("--epoch_length", type=int, help="iters per epoch")
 parser.add_argument("--input_weight_path", dest="input_weight_path", help="Input path for weights. If not specified, will try to load default weights provided by keras.")
 parser.add_argument("--output_weight_path", help="Ouput path for weights of sv model.")
@@ -124,15 +126,27 @@ parser.add_argument('--reid_gt_min_overlap', type=float, default=.3, help='minim
 
 #classifier
 parser.add_argument("--num_rois", type=int, help="Number of RoIs to process at once.", default=4)
+parser.add_argument("--num_pos", type=int, help="Number of pos RoIs to process at once.", default=2)
+parser.add_argument("--fix_num_pos", action="store_true", help="Number of pos RoIs is fixed to num_pos for every iterations.", default=False)
 parser.add_argument('--classifier_num_input_features', type=int, default=512, help='number of input features of classifier')
+parser.add_argument('--classifier_poolsize', type=int, default=7, help='pooling size')
+parser.add_argument('--classifier_view_pooling', type=str, default='reduce_concat', help='how to view pooling')
 parser.add_argument('--classifier_nms_thresh', type=float, default=.3)
+parser.add_argument('--classifier_mv_nms_thresh', type=float, default=.3)
+parser.add_argument('--classifier_inter_cls_mv_nms_thresh', type=float, default=.3)
 parser.add_argument("--mv_nms", action="store_true", default=False)
+parser.add_argument("--inter_cls_mv_nms", action="store_true", default=False)
+parser.add_argument("--json_nms", action="store_true", default=False)
+parser.add_argument("--sv_nms", action="store_true", default=False)
 
 #classifier_gt
 parser.add_argument('--classifier_std_scaling', nargs=4, default=[8.0, 8.0, 4.0, 4.0], help='scaling the standard deviation. x1, x2, y1, y2')
 parser.add_argument('--classifier_max_overlap', type=float, default=.4, help='threshold for positive sample')
 parser.add_argument('--classifier_min_overlap', type=float, default=0.0, help='threshold for negative sample')
+parser.add_argument('--small_obj_size', type=float, default=1000., help='size of small gt')
+parser.add_argument('--classifier_small_obj_max_overlap', type=float, default=.1, help='threshold for positive sample of small gt')
 parser.add_argument("--fair_classifier_gt_choice", help="fair choie of gt", action="store_true", default=False)
+parser.add_argument("--unique_sample", help="remove repeated samples", action="store_true", default=False)
 
 #drawing
 parser.add_argument("--draw_inst_by_inst", help="draw one inst in one image.", action="store_true", default=False)

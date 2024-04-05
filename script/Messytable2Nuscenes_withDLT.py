@@ -327,8 +327,8 @@ if __name__ == '__main__' :
     info_path = os.path.join(args.save_dir, 'messytable_infos_{}.pkl'.format(args.type))
     
 
-    #os.makedirs(args.save_dir, exist_ok=True)
-    #with open(info_path, 'wb') as f:
-    #    pickle.dump(data, f)
+    os.makedirs(args.save_dir, exist_ok=True)
+    with open(info_path, 'wb') as f:
+        pickle.dump(data, f)
 
 

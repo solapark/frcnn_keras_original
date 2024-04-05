@@ -9,7 +9,7 @@ from gt.calc_regr import CALC_REGR
 
 class CLASSIFIER_GT_CALCULATOR:
     def __init__(self, args):
-        self.ideal_num_pos = args.num_rois // 2
+        self.ideal_num_pos = args.num_pos 
         self.num_valid_cam = args.num_valid_cam
         self.classifier_std_scaling = args.classifier_std_scaling
         self.num_cls = args.num_cls
@@ -30,10 +30,10 @@ class CLASSIFIER_GT_CALCULATOR:
         
  
     def get_batch(self, *args):
-        X_box_batch, Y_cls_batch, Y_regr_batch, ious_list_batch, num_neg_batch, num_pos_batch, pos_neg_result_batch = [], [], [], [], [], [], []
+        X_box_batch, Y_cls_batch, Y_regr_batch, ious_list_batch, num_neg_batch, num_pos_batch, pos_neg_result_batch, sel_idx_batch = [], [], [], [], [], [], [], []
         for args_one_batch in zip(*args) :
             #X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos = self.calc_classifier_gt(*args_one_batch)pos_neg_result
-            X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos, pos_neg_result  = self.calc_classifier_gt(*args_one_batch)
+            X_box, Y_cls, Y_regr, iou, ious_list, num_neg, num_pos, pos_neg_result, sel_idx  = self.calc_classifier_gt(*args_one_batch)
             X_box_batch.append(X_box)
             Y_cls_batch.append(Y_cls)
             Y_regr_batch.append(Y_regr)
@@ -41,8 +41,9 @@ class CLASSIFIER_GT_CALCULATOR:
             num_neg_batch.append(num_neg)
             num_pos_batch.append(num_pos)
             pos_neg_result_batch.append(pos_neg_result)
+            sel_idx_batch.append(sel_idx)
         #return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list), np.array(num_neg_batch), np.array(num_pos_batch) 
-        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list_batch, dtype=object), np.array(num_neg_batch), np.array(num_pos_batch), np.array(pos_neg_result_batch)
+        return np.array(X_box_batch), np.array(Y_cls_batch), np.array(Y_regr_batch), np.array(iou), np.array(ious_list_batch, dtype=object), np.array(num_neg_batch), np.array(num_pos_batch), np.array(pos_neg_result_batch), np.array(sel_idx_batch)
        
     def get_gt_insts_box_cls(self, gt_insts):
         num_inst = len(gt_insts)
@@ -60,9 +61,9 @@ class CLASSIFIER_GT_CALCULATOR:
         #all_pred_boxes, (300, num_valid_cam, 4)
         #is_pred_box_valid (300, num_valid_cam)
         #gt_insts, (N, num_valid_cam, 4)
-
         all_gt_boxes, gt_cls, is_gt_box_valid = self.get_gt_insts_box_cls(gt_insts)
         all_gt_boxes = np.around(all_gt_boxes/self.rpn_stride)
+        gt_is_small_objs = (all_gt_boxes[..., 2] - all_gt_boxes[..., 0])*(all_gt_boxes[..., 3] - all_gt_boxes[..., 1]) <= self.args.small_obj_size
         #all_gt_boxes = all_gt_boxes/self.rpn_stride
         pos_pred_idx, pos_gt_idx, neg_idx = [], [], []
         pos_iou, pos_iou_list, neg_iou, neg_iou_list = [], [], [], []
@@ -76,8 +77,9 @@ class CLASSIFIER_GT_CALCULATOR:
             best_valid_iou_list = None
             best_gt_idx = -1
             best_is_neg = False
-            for gt_idx, (gt_boxes, is_gt_valid) in enumerate(zip(all_gt_boxes, is_gt_box_valid)):
-                cur_iou, iou_list, valid_iou_list, is_neg = utility.mv_iou(pred_boxes, gt_boxes, is_pred_valid, is_gt_valid)
+            best_is_small_obj = np.zeros(self.num_valid_cam)
+            for gt_idx, (gt_boxes, is_gt_valid, gt_is_small_obj) in enumerate(zip(all_gt_boxes, is_gt_box_valid, gt_is_small_objs)):
+                cur_iou, iou_list, valid_iou_list, valid_list, is_neg = utility.mv_iou(pred_boxes, gt_boxes, is_pred_valid, is_gt_valid)
 
                 if cur_iou > best_iou : 
                     best_iou = cur_iou 
@@ -85,10 +87,12 @@ class CLASSIFIER_GT_CALCULATOR:
                     best_valid_iou_list = valid_iou_list
                     best_gt_idx = gt_idx
                     best_is_neg = is_neg
+                    best_is_small_obj = gt_is_small_obj[valid_list]
 
             if best_iou > self.min_overlap :
-                #if best_is_neg or best_iou < self.max_overlap :
-                if best_is_neg or (np.array(best_valid_iou_list) < self.max_overlap).any() :
+                thresh = np.full_like(best_valid_iou_list, self.max_overlap)
+                thresh[best_is_small_obj] = self.args.classifier_small_obj_max_overlap
+                if best_is_neg or (np.array(best_valid_iou_list) < thresh).any() :
                     neg_idx.append(pred_idx)
                     neg_iou.append(best_iou)
                     neg_iou_list.append(best_iou_list)
@@ -169,19 +173,23 @@ class CLASSIFIER_GT_CALCULATOR:
         X_box[:, :, 2] -= X_box[:, :, 0]
         X_box[:, :, 3] -= X_box[:, :, 1]
 
-        random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list = self.get_random_samples(X_box, Y_cls, Y_regr, iou, iou_list, num_neg, num_pos, pos_choice_prob=pos_choice_prob)
+        random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, sel_idx = self.get_random_samples(X_box, Y_cls, Y_regr, iou, iou_list, num_neg, num_pos, pos_choice_prob=pos_choice_prob)
 
         #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos
         #return random_X_box, random_Y_cls, random_Y_regr, random_iou, random_iou_list, num_neg, num_pos, pos_neg_result
-        return random_X_box, random_Y_cls, random_Y_regr, random_iou, all_iou_list, num_neg, num_pos, pos_neg_result
+        return random_X_box, random_Y_cls, random_Y_regr, random_iou, np.array(all_iou_list), num_neg, num_pos, np.array(pos_neg_result), sel_idx
 
 
     def get_random_samples(self, X2, Y1, Y2, iou, iou_list, num_neg, num_pos, pos_choice_prob):
         neg_samples = np.arange(0, num_neg)
         pos_samples = np.arange(num_neg, num_neg+num_pos)
-        if num_pos > self.ideal_num_pos : 
+        if self.args.fix_num_pos : 
+            pos_samples= np.random.choice(pos_samples, self.ideal_num_pos, replace=True, p=pos_choice_prob)
+            num_pos = len(pos_samples)
+        elif num_pos > self.ideal_num_pos : 
             pos_samples= np.random.choice(pos_samples, self.ideal_num_pos, replace=False, p=pos_choice_prob)
             num_pos = len(pos_samples)
+
         num_rest = self.args.num_rois - num_pos
         if num_neg > num_rest :
             neg_samples = np.random.choice(neg_samples, num_rest, replace=False)
@@ -189,4 +197,4 @@ class CLASSIFIER_GT_CALCULATOR:
             neg_samples = np.random.choice(neg_samples, num_rest, replace=True)
         
         sel_samples = pos_samples.tolist() + neg_samples.tolist()
-        return X2[sel_samples], Y1[sel_samples], Y2[sel_samples], iou[sel_samples], iou_list[sel_samples]
+        return X2[sel_samples], Y1[sel_samples], Y2[sel_samples], iou[sel_samples], iou_list[sel_samples], sel_samples

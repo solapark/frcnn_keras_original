@@ -101,17 +101,33 @@ class FRCNN_VGG:
             out_regr: regression layer output
         """
 
-        input_shape = (num_rois,7,7,512)
-        pooling_regions = 7
+        #input_shape = (num_rois,7,7,512)
+        pooling_regions = self.args.classifier_poolsize
 
-        # num_rois (4) 7x7 roi pooling
-        reduce_channel = Conv2D(num_feat//num_cam, (3, 3), activation='relu', padding='same', name='reduce_channel')
-        out_roi_pools = []
-        for i in range(num_cam):
-            reduced_base_layer = reduce_channel(base_layers[i])
-            out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([reduced_base_layer, input_rois[i]])) #(1, 4, 7, 7, 512)
-            #out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([base_layers[i], input_rois[i]])) #(1, 4, 7, 7, 512)
-        out_roi_pool = Concatenate(axis=-1, name='ViewPooling')(out_roi_pools)
+        if self.args.classifier_view_pooling == 'reduce_concat' : 
+            # num_rois (4) 7x7 roi pooling
+            reduce_channel = Conv2D(num_feat//num_cam, (3, 3), activation='relu', padding='same', name='reduce_channel')
+            out_roi_pools = []
+            for i in range(num_cam):
+                reduced_base_layer = reduce_channel(base_layers[i])
+                out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([reduced_base_layer, input_rois[i]])) #(1, 4, 7, 7, 512)
+                #out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([base_layers[i], input_rois[i]])) #(1, 4, 7, 7, 512)
+            out_roi_pool = Concatenate(axis=-1, name='ViewPooling')(out_roi_pools)
+
+        elif self.args.classifier_view_pooling == 'maxpool' : 
+            unsqueeze_layer = Lambda(lambda x: K.expand_dims(x, axis=-1))
+            max_pool_layer = Lambda(lambda x: K.max(x, axis=-1, keepdims=True))
+
+            reduce_channel = Conv2D(num_feat//num_cam *num_cam, (3, 3), activation='relu', padding='same', name='conv_channel')
+            out_roi_pools = []
+            for i in range(num_cam):
+                reduced_base_layer = reduce_channel(base_layers[i])
+                out_roi_pools.append(RoiPoolingConv(pooling_regions, num_rois)([reduced_base_layer, input_rois[i]])) #(1, 4, 7, 7, 512)
+            #out_roi_pool = K.max(K.stack(out_roi_pools, axis=-1), axis=-1)
+            reshaped_out_roi_pools = [unsqueeze_layer(pool) for pool in out_roi_pools]
+            stacked_out_roi_pools = Concatenate(axis=-1, name='ViewMaxPooling')(reshaped_out_roi_pools)
+            out_roi_pool = max_pool_layer(stacked_out_roi_pools)
+
         out_roi_pool_flat = TimeDistributed(Flatten(name='flatten'))(out_roi_pool)
         # Flatten the convlutional layer and connected to 2 FC and 2 dropout
         #out = TimeDistributed(Conv2D(512, (3, 3), activation='relu', padding='same', name='classifier_conv1'))(out_roi_pool)

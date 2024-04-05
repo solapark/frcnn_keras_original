@@ -68,6 +68,15 @@ class json_maker :
     def insert_instance_summary(self, scene, inst, cls) :
         self.json['scenes'][scene]['instance_summary'][inst] = cls
 
+    def insert_rp(self, scene, cam, inst, pred_id, x1, y1, x2, y2, iou, prob) :
+        x1, y1, x2, y2 = list(map(float, [x1, y1, x2, y2]))
+        iou = float(iou)
+        prob = float(prob)
+        if 'rp' not in  self.json['scenes'][scene]['cameras'][cam]['instances'][inst] :
+            self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['rp'] = {}
+        rp_size = len(self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['rp'])
+        self.json['scenes'][scene]['cameras'][cam]['instances'][inst]['rp'][rp_size+1] = {'id' : pred_id, 'pos': [x1, y1, x2, y2], 'iou':iou, 'prob':prob}
+
     def insert_instance(self, scene, cam, inst, cls, x1, y1, x2, y2, prob=None) :
         x1, y1, x2, y2 = list(map(float, [x1, y1, x2, y2]))
         prob = float(prob) if prob else None

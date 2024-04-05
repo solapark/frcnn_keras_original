@@ -136,6 +136,8 @@ def draw_json(args, dataloader):
     for idx in range(len(dataloader)):
         images, labels, image_paths, extrins, rpn_results, ven_results = dataloader[idx]
         new_labels = L2D.labels_to_draw_format(labels)
+        if args.json_nms : 
+            new_labels = utility.json_nms(new_labels, args)
         result_saver.save(images, image_paths, new_labels)
         progbar.update(idx+1)
 
@@ -159,7 +161,7 @@ def write_json(args, model, img_preprocessor, dataloader):
 
         json_writer.write(all_dets, image_paths)
         progbar.update(idx+1)
-        if(idx==50) : break
+        #if(idx==50) : break
 
     json_writer.close()
 
@@ -288,6 +290,9 @@ def val_json_json(args, gt_dataloader, pred_dataloader):
         gt_batch = sv_gt_batch_generator.get_gt_batch(gt_labels)
         all_dets = L2D.labels_to_draw_format(pred_labels)
  
+        if args.json_nms : 
+            all_dets = utility.json_nms(all_dets, args)
+
         for cam_idx in range(args.num_valid_cam) : 
             dets = all_dets[cam_idx]
             gt = gt_batch[0][cam_idx]

@@ -150,6 +150,7 @@ class Map_calculator:
             pred_box = pred[box_idx]
             #cls = pred_box['class']
             cls = pred_box['class'] if not self.args.eval_rpn_only else 'water1'
+            if cls=='bg' : continue 
             prob = pred_box['prob']
             bbox = self.get_x1y1x2y2(pred_box)
             dr_data[cls].append({"confidence":prob, "bbox":bbox})
